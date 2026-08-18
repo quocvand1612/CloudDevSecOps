@@ -14,15 +14,17 @@
 
 ---
 
-## Executive Summary
+## 🎯 Executive Summary
 
-**CloudDevSecOps** is an end-to-end, enterprise-grade cloud security and DevSecOps reference implementation on AWS. It demonstrates how to achieve defense-in-depth, zero-trust container security, supply chain integrity, and automated runtime incident response (SOAR)—while maintaining an ultra-low operational cost profile for lab testing and continuous demonstration.
+**CloudDevSecOps** is an end-to-end, enterprise-grade cloud security and DevSecOps reference implementation on AWS. It demonstrates defense-in-depth, zero-trust container security, supply chain integrity, automated runtime incident response (SOAR), and infrastructure-as-code automation—engineered with a dual-profile model:
+1. **Lab Profile (`/lab`)**: An ultra-low-cost, high-speed automated validation lab (<$10/mo) for continuous CI/CD drills and rapid feedback.
+2. **Production Profile (`/prod`)**: A full enterprise-scale, Multi-AZ High Availability architecture (EKS, Aurora, Transit Gateway, Global WAF).
 
 The platform eliminates **100% of static long-lived credentials and private keys** through OpenID Connect (OIDC) federation and Sigstore keyless cryptographic verification.
 
 ---
 
-## Architecture Overview
+## 🏛️ Architecture Overview
 
 ![CloudDevSecOps Architecture](docs/architecture.png)
 
@@ -83,48 +85,48 @@ flowchart TB
 
 ---
 
-## 🚀 Environment Comparison & Deployment Status Checklist
+## 📊 Environment Comparison & Deployment Status
 
-This repository provides two distinct deployment configurations: **Lab (`terraform/environments/lab`)** optimized for ultra-low-cost continuous CI/CD automated validation (<$10/mo), and **Production (`terraform/environments/prod`)** designed for high-availability enterprise scale.
+### Deployment Status Summary
 
-### 📊 Deployment Status Summary
-
-| Environment | Status | Last Pipeline Run | Verification Method | Cost Profile |
+| Environment | Current Status | Last Pipeline Run | Verification Method | Cost Profile |
 | :--- | :---: | :---: | :--- | :--- |
 | **Lab Environment** (`environments/lab`) | 🟢 **100% Deployed & Live Verified** | Run `#32153593047` | 5/5 Automated Stage Gates & Threat Simulations | **~$5.00 - $8.00 / month** |
 | **Production Environment** (`environments/prod`) | 🟡 **Code-Ready & Validated** | Dry-Run / Lint Validated | Multi-AZ EKS + Aurora Architecture Ready | **~$310 - $350+ / month** |
 
 ---
 
-### 📋 Architecture & Feature Matrix: Lab vs. Production
+### Architecture & Feature Matrix: Lab vs. Production
 
-| Architectural Pillar | Feature / Component | Lab Environment (`/lab`) | Production Environment (`/prod`) | Lab Deployment Status |
+| Architectural Pillar | Component / Capability | Lab Profile (`terraform/environments/lab`) | Production Profile (`terraform/environments/prod`) | Lab Status |
 | :--- | :--- | :--- | :--- | :---: |
-| **Perimeter & Edge** | **CDN & Edge Cache** | CloudFront (Feature Flag `default=false`) | Global CloudFront CDN with TLS 1.3 Strict | ✅ Direct ALB Mode Active |
-| | **WAF & Rate Limiting** | Regional WAFv2 + Client IP Whitelist | Global WAFv2 + AWS Shield Advanced | ✅ Client IP Restriced |
-| | **Origin Authentication** | Optional `X-Origin-Verify` Header | Mandatory `X-Origin-Verify` Origin Shield | ✅ Validated |
-| **Network & Ingress** | **VPC Hub & Subnets** | Multi-Tier VPC (6 Subnets, 2 AZs) | Multi-Tier VPC + Transit Gateway (TGW) Hub | ✅ Live Verified |
-| | **Application Load Balancer** | Internet-Facing Multi-AZ ALB | Internal / External ALB with mTLS | ✅ Live Verified |
-| | **Egress NAT Routing** | **`fck-nat` (`t4g.nano` Spot / ~$1.50/mo)** | **AWS Managed Multi-AZ NAT Gateways** | ✅ Live Verified |
-| **Compute & K8s** | **Kubernetes Engine** | Lightweight K3s / Graviton (`t4g.small`) | **AWS Managed EKS Enterprise (v1.30)** | ✅ Live Verified |
+| **Perimeter & Edge** | **CDN Acceleration** | CloudFront (Feature Toggle `default=false`) | Global CloudFront CDN with TLS 1.3 Strict | ✅ Direct ALB Active |
+| | **WAF & Rate Limiting** | Regional WAFv2 + Authorized IP Whitelist | Global WAFv2 + AWS Shield Advanced | ✅ Whitelist Enforced |
+| | **Origin Shield** | Optional `X-Origin-Verify` Header | Mandatory `X-Origin-Verify` Origin Token | ✅ Validated |
+| **Network & Ingress** | **VPC Toplogy** | Multi-Tier VPC (6 Subnets, 2 AZs) | Multi-Tier VPC + Transit Gateway (TGW) Hub | ✅ Live Verified |
+| | **Load Balancer** | Internet-Facing Multi-AZ ALB | Multi-AZ Internal / External ALB with mTLS | ✅ Live Verified |
+| | **Egress NAT** | **`fck-nat` (`t4g.nano` Spot / ~$1.50/mo)** | **AWS Managed Multi-AZ NAT Gateways** | ✅ Live Verified |
+| **Compute & K8s** | **Kubernetes Engine** | Lightweight Graviton Node (`t4g.small`) | **AWS Managed EKS Enterprise (v1.30)** | ✅ Live Verified |
 | | **Node Security** | IMDSv2 Hop Limit 1, Non-Root Systemd | EKS Managed Node Groups with Bottlerocket | ✅ Live Verified |
-| | **Container Security** | Distroless Non-Root Image (UID 65532) | Distroless Non-Root + Cosign Signature | ✅ Live Verified |
-| | **eBPF CNI & Policy** | Host-level eBPF & L7 Route Filtering | Cilium eBPF CNI + Kyverno Admission | ✅ Live Verified |
+| | **Container Image** | Distroless Non-Root (UID 65532) | Distroless Non-Root + Cosign Signature | ✅ Live Verified |
+| | **eBPF CNI & Policy** | Host-level eBPF & L7 Route Filtering | Cilium eBPF CNI + Kyverno Admission Controller | ✅ Live Verified |
 | **Data & Storage** | **Database Engine** | **RDS PostgreSQL 16 (`db.t4g.micro`)** | **Amazon Aurora PostgreSQL (Multi-AZ HA)** | ✅ Live Verified |
-| | **Network Isolation** | Isolated Data Subnets (0 Internet Routes)| Isolated Data Subnets (0 Internet Routes) | ✅ Live Verified |
+| | **Network Isolation** | Isolated Data Subnets (0 Internet Routes) | Isolated Data Subnets (0 Internet Routes) | ✅ Live Verified |
 | | **Data Encryption** | KMS CMK with 365-Day Auto-Rotation | KMS CMK with 365-Day Auto-Rotation | ✅ Live Verified |
-| | **IAM DB Authentication** | Enabled (`iam_database_authentication`) | Enabled (`iam_database_authentication`) | ✅ Live Verified |
-| **Security & Secrets** | **Secrets Management** | AWS Secrets Manager (KMS Encrypted) | Secrets Manager + External Secrets Operator | ✅ Live Verified |
-| | **Identity & Access (IAM)**| Keyless GitHub Actions OIDC Auth | Keyless OIDC + EKS IRSA Service Accounts | ✅ Live Verified |
+| | **IAM DB Authentication**| Enabled (`iam_database_authentication`) | Enabled (`iam_database_authentication`) | ✅ Live Verified |
+| **Security & Secrets** | **Secrets Store** | AWS Secrets Manager (KMS Encrypted) | Secrets Manager + External Secrets Operator | ✅ Live Verified |
+| | **IAM & Auth** | Tokenless GitHub Actions OIDC Auth | Keyless OIDC + EKS IRSA Service Accounts | ✅ Live Verified |
 | **SOAR & Response** | **Threat Detection** | Automated eBPF Attack Simulation | Falco eBPF Kernel Threat Detection | ✅ Live Verified (5/5) |
-| | **Automated Containment**| EventBridge + Quarantine Lambda | EventBridge + SOAR Auto-Isolation Engine | ✅ Live Verified |
+| | **Auto-Containment** | EventBridge + Quarantine Lambda | EventBridge + SOAR Auto-Isolation Engine | ✅ Live Verified |
 
 ---
 
-### 🧪 Lab Stage Gate Verification Checklist (100% Passed)
+## 🧪 Live Lab Verification Matrix (100% Passed)
+
+The lab environment is continuously verified through a 5-stage automated gate pipeline:
 
 - [x] **Stage 1: Foundation Tier** (`tests/stages/01_verify_foundation.sh`)
-  - [x] KMS Customer Managed Key active with annual rotation enabled.
+  - [x] KMS Customer Managed Key active with 365-day annual rotation enabled.
   - [x] Multi-tier VPC provisioned across 2 AZs (Public Ingress, Private Compute, Isolated Data).
 - [x] **Stage 2: Security & Data Tier** (`tests/stages/02_verify_security_data.sh`)
   - [x] Strict security group chaining (ALB ➡️ Compute ➡️ Database).
@@ -145,11 +147,58 @@ This repository provides two distinct deployment configurations: **Lab (`terrafo
 
 ---
 
-## The 6 Pillars of DevSecOps Implemented
+## 📋 Production Readiness & Testing Roadmap (TODO)
+
+To validate and test the full enterprise **Production Profile (`terraform/environments/prod`)**, follow this phased execution roadmap:
+
+```mermaid
+graph LR
+    P1["Phase 1: Pre-Flight & SAST"] --> P2["Phase 2: Core Infra & TGW"]
+    P2 --> P3["Phase 3: EKS & CNI Deploy"]
+    P3 --> P4["Phase 4: Aurora & Secrets"]
+    P4 --> P5["Phase 5: Edge Cutover"]
+    P5 --> P6["Phase 6: Red-Team & Chaos"]
+```
+
+### 📌 Phase 1: Pre-Flight IaC & Policy Gate
+- [ ] **Terraform Plan Validation**: Execute `terraform -chdir=terraform/environments/prod plan` with 0 syntax or graph dependency errors.
+- [ ] **Static Security Audit**: Run Checkov & tfsec against `environments/prod` to confirm 0 HIGH/CRITICAL policy violations.
+- [ ] **FinOps Budget Projection**: Run Infracost to review estimated baseline monthly spend (~$310 - $350/mo) against allocated AWS budget.
+
+### 📌 Phase 2: Core Enterprise Infrastructure Provisioning
+- [ ] **VPC & Transit Gateway Hub**: Deploy Multi-AZ VPC across 3 Availability Zones with dedicated Transit Gateway (TGW) attachment.
+- [ ] **Managed NAT Gateways**: Verify HA AWS Managed NAT Gateways in each Availability Zone.
+- [ ] **KMS Envelope Encryption**: Verify CMK policies allow EKS secrets encryption, EBS volume encryption, and Aurora storage.
+
+### 📌 Phase 3: Production EKS Cluster & CNI Deployment
+- [ ] **EKS v1.30 Control Plane**: Provision EKS cluster with endpoint private access and KMS secrets envelope encryption.
+- [ ] **Bottlerocket Managed Node Groups**: Launch multi-AZ auto-scaling node groups using security-hardened AWS Bottlerocket OS.
+- [ ] **Cilium eBPF CNI Installation**: Deploy Cilium with kube-proxy replacement, L7 HTTP filtering, and eBPF host routing.
+- [ ] **Kyverno Admission Controller**: Enforce CIS Kubernetes Benchmark policies (disallow root, disallow host namespaces, enforce read-only rootfs).
+
+### 📌 Phase 4: Multi-AZ Aurora PostgreSQL & Secrets Sync
+- [ ] **Aurora Cluster Provisioning**: Deploy Multi-AZ Aurora PostgreSQL 16 with automated failover and storage auto-scaling.
+- [ ] **IAM Database Authentication**: Verify microservice connects to Aurora using ephemeral 15-minute AWS STS tokens (zero static passwords).
+- [ ] **External Secrets Operator (ESO)**: Verify ESO synchronizes application secrets directly from AWS Secrets Manager using IRSA.
+
+### 📌 Phase 5: Global Edge Cutover & Origin Shield Verification
+- [ ] **CloudFront CDN with TLS 1.3 Strict**: Deploy global distribution with custom domain, ACM certificate, and Origin Request Policy.
+- [ ] **WAFv2 Edge Rules**: Enable AWS Managed Core Rule Set (CRS), Known Bad Inputs, and SQLi protection at CloudFront edge.
+- [ ] **Origin Verification Token Drill**: Send direct requests to ALB DNS to verify mandatory `403 Forbidden` response when `X-Origin-Verify` is absent.
+
+### 📌 Phase 6: Red-Team Chaos & SOAR Validation Drill
+- [ ] **Falco eBPF Detection Test**: Trigger simulated shell execution inside a production pod and verify alert generation.
+- [ ] **Automated Quarantine Drill**: Verify EventBridge invokes SOAR Lambda to apply quarantine label and isolate pod in <3 seconds.
+- [ ] **Multi-AZ Database Failover Test**: Trigger manual Aurora failover and verify microservice zero-data-loss reconnect time (<30s).
+- [ ] **Node Drain & Auto-Healing**: Drain an EKS worker node to verify seamless pod rescheduling and uninterrupted service availability.
+
+---
+
+## 🛡️ The 6 Pillars of DevSecOps Implemented
 
 ```
                                   ┌─────────────────────────────────────────────────────────┐
-                                  │             CloudDevSecOps Architecture           │
+                                  │             CloudDevSecOps Architecture                 │
                                   └────────────────────────────┬────────────────────────────┘
                                                                │
      ┌───────────────────┬─────────────────────┼──────────────────────┬────────────────────┬───────────────────┐
@@ -170,7 +219,7 @@ This repository provides two distinct deployment configurations: **Lab (`terrafo
 - **Software Bill of Materials (SBOM)**: Syft automatically generates CycloneDX and SPDX SBOMs attached directly to container registry artifacts.
 
 ### 2. Zero-Trust Cloud Infrastructure (IaC)
-- **Modular Terraform / OpenTofu**: Infrastructure split into decoupled modules (`kms`, `vpc`, `fck-nat`, `security-groups`, `cloudfront-waf`, `secrets-manager`, `k3s-lab-node`, `eks-enterprise`, `rds-postgres`, `soar-remediation`).
+- **Modular Terraform / OpenTofu**: Decoupled modules (`kms`, `vpc`, `fck-nat`, `security-groups`, `cloudfront-waf`, `secrets-manager`, `k3s-lab-node`, `eks-enterprise`, `rds-postgres`, `soar-remediation`).
 - **Encrypted Remote State**: S3 bucket protected with KMS CMK, TLS 1.2+ request enforcement policy, bucket versioning, and DynamoDB distributed locking.
 - **Node Hardening**: AWS EC2 instance metadata service version 2 (IMDSv2) enforced with `http_put_response_hop_limit = 1`, neutralizing Server-Side Request Forgery (SSRF) cloud credential exfiltration.
 
@@ -178,11 +227,11 @@ This repository provides two distinct deployment configurations: **Lab (`terrafo
 - **CloudFront to ALB Origin Verification**: The Public Application Load Balancer returns `403 Forbidden` on direct IP/DNS access. Requests are only accepted when carrying the cryptographic `X-Origin-Verify` token injected by CloudFront.
 - **AWS WAFv2**: Protects against the OWASP Top 10, blocks known malicious inputs, enforces IP reputation filtering, and limits requests to 500 req/5min per client IP.
 - **Cilium eBPF CNI**: Enforces Layer 7 HTTP path and method filtering inside the cluster, restricting pods to only authorized API endpoints.
-- **Subnet Tiering**: Clear segregation between Public Ingress, Private Compute, and strictly Isolated Data tiers (no internet gateway routes in database subnets).
+- **Subnet Tiering**: Segregation between Public Ingress, Private Compute, and strictly Isolated Data tiers (no internet gateway routes in database subnets).
 
 ### 4. Hardened Kubernetes Workloads & Policy as Code
 - **Restricted Pod Security Standard**: Enforces non-root user (`UID 65532`), `readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`, `capabilities.drop = ["ALL"]`, and `seccompProfile: RuntimeDefault`.
-- **Policy as Code (Kyverno)**: Rejects any non-compliant deployment violating security baselines at the Kubernetes admission controller level.
+- **Policy as Code (Kyverno)**: Rejects non-compliant deployments violating security baselines at the Kubernetes admission controller level.
 - **Secret Management**: External Secrets Operator (ESO) fetches application secrets directly from AWS Secrets Manager using IAM authentication without storing credentials in source control or GitOps repositories.
 
 ### 5. Runtime Threat Detection & Automated SOAR Remediation
@@ -206,7 +255,7 @@ This repository provides two distinct deployment configurations: **Lab (`terrafo
 
 ---
 
-## Quickstart Guide
+## ⚡ Quickstart Guide
 
 ### Prerequisites
 - [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) configured (`aws sts get-caller-identity`)
@@ -245,7 +294,7 @@ make tf-destroy-lab
 
 ---
 
-## Repository Structure
+## 📂 Repository Structure
 
 ```
 CloudDevSecOps/
@@ -257,9 +306,10 @@ CloudDevSecOps/
 ├── .pre-commit-config.yaml                # Pre-commit security quality gates
 ├── Makefile                               # One-command developer operations
 ├── docs/
-│   ├── design_architecture.md             # Core architecture specification & Mermaid diagrams
+│   ├── design_architecture.md             # Core architecture specification & diagrams
 │   ├── threat_model.md                    # STRIDE Threat Modeling assessment
 │   ├── security_controls_matrix.md        # CIS AWS v3.0, NIST CSF, OWASP Top 10 mapping
+│   ├── troubleshooting_and_engineering_notes.md # Post-mortem & issue-to-commit trace
 │   └── runbooks/
 │       └── compromised_pod_incident_response.md # SOAR incident response runbook
 ├── terraform/
@@ -286,21 +336,14 @@ CloudDevSecOps/
 │   └── apps/
 │       └── secure-api/                    # Hardened Go microservice (distroless non-root)
 └── tests/
-    └── security/
-        └── simulate_attack.sh             # Automated security verification test suite
+    └── stages/                            # Automated 5-stage pipeline gate scripts
 ```
 
 ---
 
-## Compliance & Threat Model Mapping
+## 📜 Compliance & Threat Model Mapping
 
-- **Threat Model**: Conducted under the **STRIDE** methodology. Full document at [docs/threat_model.md](docs/threat_model.md).
+- **Threat Model**: Evaluated under the **STRIDE** methodology. See [docs/threat_model.md](docs/threat_model.md).
 - **Controls Matrix**: Mapped against **CIS AWS Foundations Benchmark v3.0**, **NIST CSF**, and **OWASP Top 10**. See [docs/security_controls_matrix.md](docs/security_controls_matrix.md).
-- **Incident Response**: Operational SOAR procedure documented at [docs/runbooks/compromised_pod_incident_response.md](docs/runbooks/compromised_pod_incident_response.md).
-
----
-
-## Author
-
-Maintained by **Quoc Van** ([@quocvand1612](https://github.com/quocvand1612))
-
+- **Incident Response Runbook**: Automated SOAR procedure documented at [docs/runbooks/compromised_pod_incident_response.md](docs/runbooks/compromised_pod_incident_response.md).
+- **Troubleshooting & Post-Mortem**: Complete engineering issues and commit trace matrix documented in [docs/troubleshooting_and_engineering_notes.md](docs/troubleshooting_and_engineering_notes.md).
