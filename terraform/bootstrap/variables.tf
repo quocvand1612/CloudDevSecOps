@@ -31,5 +31,5 @@ variable "monthly_budget_usd" {
 variable "budget_alert_email" {
   type        = string
   description = "Email address for AWS Budget limit alerts"
-  default     = "quocvand1612@example.com"
+  default     = "quoc.vand.work2001@gmail.com"
 }
