@@ -121,9 +121,10 @@ resource "aws_instance" "fck_nat" {
   vpc_security_group_ids = [aws_security_group.fck_nat.id]
   iam_instance_profile   = aws_iam_instance_profile.fck_nat.name
 
-  source_dest_check = false
-  monitoring        = true
-  ebs_optimized     = true
+  source_dest_check           = false
+  monitoring                  = true
+  ebs_optimized               = true
+  user_data_replace_on_change = true
 
   metadata_options {
     http_endpoint               = "enabled"

@@ -91,8 +91,9 @@ resource "aws_instance" "node" {
   vpc_security_group_ids = [var.compute_security_group_id]
   iam_instance_profile   = aws_iam_instance_profile.node.name
 
-  monitoring    = true
-  ebs_optimized = true
+  monitoring                  = true
+  ebs_optimized               = true
+  user_data_replace_on_change = true
 
   dynamic "instance_market_options" {
     for_each = var.use_spot ? [1] : []
