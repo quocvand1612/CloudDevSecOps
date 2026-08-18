@@ -1,0 +1,44 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: "en-US"
+early_access: false
+
+reviews:
+  profile: "assertive"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - "main"
+  
+  # Ensure all code review fixes are provided as 1-click GitHub Suggestion blocks
+  path_instructions:
+    - path: "**/*.tf"
+      instructions: |
+        - Verify zero hardcoded secrets or credentials.
+        - Ensure all AWS resources use KMS CMK encryption and least-privilege IAM policies.
+        - Enforce IMDSv2 (HttpTokens=required, HopLimit=1) on all EC2 resources.
+        - Whenever suggesting a code change, format it as a 1-click GitHub suggestion code block (` ```suggestion `).
+    - path: "k8s/**/*.yaml"
+      instructions: |
+        - Enforce CIS Kubernetes Benchmark: readOnlyRootFilesystem, runAsNonRoot, allowPrivilegeEscalation: false, drop ALL capabilities.
+        - Whenever suggesting a code change, format it as a 1-click GitHub suggestion code block (` ```suggestion `).
+    - path: "**/*.py"
+      instructions: |
+        - Enforce secure headers, non-root daemons, and robust error handling.
+        - Format code fixes as 1-click GitHub suggestion blocks.
+    - path: ".github/workflows/*.yml"
+      instructions: |
+        - Ensure OIDC keyless authentication is used instead of long-lived static AWS access keys.
+        - Enforce minimal runner permissions (`permissions: ...`).
+
+chat:
+  auto_reply: true
+
+issue_enrichment:
+  auto_enrich:
+    enabled: true
