@@ -24,6 +24,8 @@ The platform eliminates **100% of static long-lived credentials and private keys
 
 ## Architecture Overview
 
+![CloudDevSecOps Architecture](docs/architecture.png)
+
 ```mermaid
 flowchart TB
     classDef edgeStyle fill:#FFF0F5,stroke:#E7157B,stroke-width:2px,color:#1A202C;
