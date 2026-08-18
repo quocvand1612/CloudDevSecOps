@@ -26,6 +26,10 @@ permissions:
   id-token: write # Required for requesting AWS STS OIDC token
   contents: read
 
+concurrency:
+  group: terraform-deploy-${{ inputs.environment || 'lab' }}
+  cancel-in-progress: false
+
 env:
   AWS_REGION: "ap-southeast-1"
   ROLE_TO_ASSUME: "arn:aws:iam::033781183622:role/cloud-devsecops-github-actions-role"
