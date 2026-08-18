@@ -1,0 +1,12 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: incident-auto-quarantine-policy
+  namespace: prod-workload
+spec:
+  endpointSelector:
+    matchLabels:
+      quarantine: "true"
+  # Zero ingress and zero egress allowed when quarantine label is present
+  ingress: []
+  egress: []

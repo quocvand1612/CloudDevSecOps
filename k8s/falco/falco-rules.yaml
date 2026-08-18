@@ -1,0 +1,28 @@
+# ==============================================================================
+# Falco Custom eBPF Detection Rules for DevSecOps Lab
+# ==============================================================================
+customRules:
+  devsecops_threat_detection.yaml: |-
+    - rule: Terminal Shell Spawned in Restricted Container
+      desc: Detects interactive shell execution inside container workloads
+      condition: >
+        spawned_process and container
+        and (proc.name in (bash, sh, zsh, ksh, csh) or proc.pname in (bash, sh, zsh))
+        and not k8s.ns.name = "kube-system"
+      output: >
+        CRITICAL: Shell spawned in container (user=%user.name pod=%k8s.pod.name
+        ns=%k8s.ns.name container=%container.name cmd=%proc.cmdline)
+      priority: CRITICAL
+      tags: [mitre_execution, pci_dss, cis_k8s]
+
+    - rule: Read Sensitive Secrets Directory
+      desc: Detects unauthorized read operations to Kubernetes serviceaccount tokens or shadow files
+      condition: >
+        open_read and container
+        and (fd.name startswith "/var/run/secrets/kubernetes.io/serviceaccount" or fd.name = "/etc/shadow")
+        and not proc.name in (kube-proxy, coredns)
+      output: >
+        WARNING: Sensitive credentials accessed (user=%user.name file=%fd.name
+        pod=%k8s.pod.name process=%proc.name cmd=%proc.cmdline)
+      priority: WARNING
+      tags: [mitre_credential_access]

@@ -1,0 +1,5 @@
+aws_region          = "ap-southeast-1"
+project_name        = "cloud-devsecops"
+environment         = "lab"
+use_spot_instance   = true
+origin_verify_token = "ZeroTrustOriginVerificationToken2026SecOpsLab"

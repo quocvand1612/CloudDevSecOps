@@ -1,0 +1,80 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: enforce-zero-trust-workload-security
+  annotations:
+    policies.kyverno.io/title: Enforce Zero Trust Container Hardening
+    policies.kyverno.io/category: DevSecOps Compliance (CIS K8s / NSA Hardening)
+    policies.kyverno.io/severity: High
+    policies.kyverno.io/description: >-
+      Enforces read-only root filesystems, drops all capabilities, prohibits privilege escalation,
+      and requires non-root user execution across all production workloads.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: require-read-only-root-fs
+      match:
+        any:
+        - resources:
+            kinds:
+              - Pod
+            namespaces:
+              - prod-workload
+      validate:
+        message: "Security Violation: Root filesystem must be read-only (readOnlyRootFilesystem: true)."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  readOnlyRootFilesystem: true
+
+    - name: drop-all-capabilities
+      match:
+        any:
+        - resources:
+            kinds:
+              - Pod
+            namespaces:
+              - prod-workload
+      validate:
+        message: "Security Violation: Container must drop ALL Linux capabilities."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  capabilities:
+                    drop:
+                      - ALL
+
+    - name: disallow-privilege-escalation
+      match:
+        any:
+        - resources:
+            kinds:
+              - Pod
+            namespaces:
+              - prod-workload
+      validate:
+        message: "Security Violation: Privilege escalation must be disabled (allowPrivilegeEscalation: false)."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  allowPrivilegeEscalation: false
+
+    - name: require-non-root-user
+      match:
+        any:
+        - resources:
+            kinds:
+              - Pod
+            namespaces:
+              - prod-workload
+      validate:
+        message: "Security Violation: Containers must run as non-root (runAsNonRoot: true)."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  runAsNonRoot: true

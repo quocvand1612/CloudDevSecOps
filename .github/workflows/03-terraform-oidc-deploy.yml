@@ -1,0 +1,73 @@
+name: "03 - Keyless AWS Terraform Deployment (OIDC)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target deployment environment"
+        required: true
+        default: "lab"
+        type: choice
+        options:
+          - lab
+          - prod
+      action:
+        description: "Terraform action to execute"
+        required: true
+        default: "plan"
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+
+permissions:
+  id-token: write # Required for requesting AWS STS OIDC token
+  contents: read
+
+jobs:
+  terraform-deploy:
+    name: "Terraform Execution (Keyless AWS OIDC)"
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: "ap-southeast-1"
+      ROLE_TO_ASSUME: "arn:aws:iam::033781183622:role/cloud-devsecops-github-actions-role"
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC (Tokenless)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+          role-session-name: "GitHubActions-Terraform-Session"
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS Caller Identity
+        run: |
+          echo "Verifying STS Web Identity Federation..."
+          aws sts get-caller-identity
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.8.5"
+
+      - name: Terraform Init
+        working-directory: terraform/environments/${{ inputs.environment }}
+        run: terraform init
+
+      - name: Terraform Plan
+        if: ${{ inputs.action == 'plan' }}
+        working-directory: terraform/environments/${{ inputs.environment }}
+        run: terraform plan -no-color
+
+      - name: Terraform Apply
+        if: ${{ inputs.action == 'apply' }}
+        working-directory: terraform/environments/${{ inputs.environment }}
+        run: terraform apply -auto-approve
+
+      - name: Terraform Destroy
+        if: ${{ inputs.action == 'destroy' }}
+        working-directory: terraform/environments/${{ inputs.environment }}
+        run: terraform destroy -auto-approve

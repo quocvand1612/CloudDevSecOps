@@ -1,0 +1,80 @@
+# ==============================================================================
+# Security & Secret Protection (Never commit credentials or local secrets)
+# ==============================================================================
+*.env
+*.env.*
+*.pem
+*.key
+*.pub
+*.crt
+*.pfx
+*.p12
+*.vault
+secrets.auto.tfvars
+secrets.auto.tfvars.json
+*.override.tf
+*.override.tf.json
+*_override.tf
+*_override.tf.json
+
+# ==============================================================================
+# Terraform & OpenTofu
+# ==============================================================================
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+!example.tfvars
+!terraform.tfvars.example
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+.terraformrc
+terraform.rc
+.terraform.lock.hcl.backup
+
+# ==============================================================================
+# Kubernetes & Helm
+# ==============================================================================
+kubeconfig
+kubeconfig-*
+*.kubeconfig
+helm-values-local.yaml
+*.tgz
+
+# ==============================================================================
+# Containers & Binaries
+# ==============================================================================
+bin/
+dist/
+*.exe
+*.out
+*.app
+
+# ==============================================================================
+# IDE & Operating System
+# ==============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ==============================================================================
+# Logs, Reports & Scanning Cache
+# ==============================================================================
+*.log
+trivy-cache/
+.checkov/
+.infracost/
+sbom/
+coverage/
+junit.xml

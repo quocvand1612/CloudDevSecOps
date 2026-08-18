@@ -1,0 +1,47 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: secure-api-l7-policy
+  namespace: prod-workload
+spec:
+  endpointSelector:
+    matchLabels:
+      app: secure-api
+  ingress:
+  # Ingress Rule 1: Allow Ingress from Ingress Gateway / Ingress Controller with L7 Rules
+  - fromEndpoints:
+    - matchLabels:
+        "k8s:io.kubernetes.pod.namespace": ingress-kong
+    toPorts:
+    - ports:
+      - port: "8080"
+        protocol: TCP
+      rules:
+        http:
+        - method: "GET"
+          path: "^/healthz$"
+        - method: "GET"
+          path: "^/api/v1/status$"
+        - method: "GET"
+          path: "^/api/v1/metrics$"
+  egress:
+  # Egress Rule 1: Restrict DNS Egress strictly to kube-dns on UDP/TCP port 53
+  - toEndpoints:
+    - matchLabels:
+        "k8s:io.kubernetes.pod.namespace": kube-system
+        "k8s:k8s-app": kube-dns
+    toPorts:
+    - ports:
+      - port: "53"
+        protocol: ANY
+      rules:
+        dns:
+        - matchPattern: "*"
+  # Egress Rule 2: PostgreSQL Access strictly on Port 5432 to Isolated DB
+  - toCIDRSet:
+    - cidr: "10.0.20.0/24"
+    - cidr: "10.0.21.0/24"
+    toPorts:
+    - ports:
+      - port: "5432"
+        protocol: TCP
