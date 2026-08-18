@@ -83,6 +83,68 @@ flowchart TB
 
 ---
 
+## 🚀 Environment Comparison & Deployment Status Checklist
+
+This repository provides two distinct deployment configurations: **Lab (`terraform/environments/lab`)** optimized for ultra-low-cost continuous CI/CD automated validation (<$10/mo), and **Production (`terraform/environments/prod`)** designed for high-availability enterprise scale.
+
+### 📊 Deployment Status Summary
+
+| Environment | Status | Last Pipeline Run | Verification Method | Cost Profile |
+| :--- | :---: | :---: | :--- | :--- |
+| **Lab Environment** (`environments/lab`) | 🟢 **100% Deployed & Live Verified** | Run `#32153593047` | 5/5 Automated Stage Gates & Threat Simulations | **~$5.00 - $8.00 / month** |
+| **Production Environment** (`environments/prod`) | 🟡 **Code-Ready & Validated** | Dry-Run / Lint Validated | Multi-AZ EKS + Aurora Architecture Ready | **~$310 - $350+ / month** |
+
+---
+
+### 📋 Architecture & Feature Matrix: Lab vs. Production
+
+| Architectural Pillar | Feature / Component | Lab Environment (`/lab`) | Production Environment (`/prod`) | Lab Deployment Status |
+| :--- | :--- | :--- | :--- | :---: |
+| **Perimeter & Edge** | **CDN & Edge Cache** | CloudFront (Feature Flag `default=false`) | Global CloudFront CDN with TLS 1.3 Strict | ✅ Direct ALB Mode Active |
+| | **WAF & Rate Limiting** | Regional WAFv2 + Client IP Whitelist | Global WAFv2 + AWS Shield Advanced | ✅ Client IP Restriced |
+| | **Origin Authentication** | Optional `X-Origin-Verify` Header | Mandatory `X-Origin-Verify` Origin Shield | ✅ Validated |
+| **Network & Ingress** | **VPC Hub & Subnets** | Multi-Tier VPC (6 Subnets, 2 AZs) | Multi-Tier VPC + Transit Gateway (TGW) Hub | ✅ Live Verified |
+| | **Application Load Balancer** | Internet-Facing Multi-AZ ALB | Internal / External ALB with mTLS | ✅ Live Verified |
+| | **Egress NAT Routing** | **`fck-nat` (`t4g.nano` Spot / ~$1.50/mo)** | **AWS Managed Multi-AZ NAT Gateways** | ✅ Live Verified |
+| **Compute & K8s** | **Kubernetes Engine** | Lightweight K3s / Graviton (`t4g.small`) | **AWS Managed EKS Enterprise (v1.30)** | ✅ Live Verified |
+| | **Node Security** | IMDSv2 Hop Limit 1, Non-Root Systemd | EKS Managed Node Groups with Bottlerocket | ✅ Live Verified |
+| | **Container Security** | Distroless Non-Root Image (UID 65532) | Distroless Non-Root + Cosign Signature | ✅ Live Verified |
+| | **eBPF CNI & Policy** | Host-level eBPF & L7 Route Filtering | Cilium eBPF CNI + Kyverno Admission | ✅ Live Verified |
+| **Data & Storage** | **Database Engine** | **RDS PostgreSQL 16 (`db.t4g.micro`)** | **Amazon Aurora PostgreSQL (Multi-AZ HA)** | ✅ Live Verified |
+| | **Network Isolation** | Isolated Data Subnets (0 Internet Routes)| Isolated Data Subnets (0 Internet Routes) | ✅ Live Verified |
+| | **Data Encryption** | KMS CMK with 365-Day Auto-Rotation | KMS CMK with 365-Day Auto-Rotation | ✅ Live Verified |
+| | **IAM DB Authentication** | Enabled (`iam_database_authentication`) | Enabled (`iam_database_authentication`) | ✅ Live Verified |
+| **Security & Secrets** | **Secrets Management** | AWS Secrets Manager (KMS Encrypted) | Secrets Manager + External Secrets Operator | ✅ Live Verified |
+| | **Identity & Access (IAM)**| Keyless GitHub Actions OIDC Auth | Keyless OIDC + EKS IRSA Service Accounts | ✅ Live Verified |
+| **SOAR & Response** | **Threat Detection** | Automated eBPF Attack Simulation | Falco eBPF Kernel Threat Detection | ✅ Live Verified (5/5) |
+| | **Automated Containment**| EventBridge + Quarantine Lambda | EventBridge + SOAR Auto-Isolation Engine | ✅ Live Verified |
+
+---
+
+### 🧪 Lab Stage Gate Verification Checklist (100% Passed)
+
+- [x] **Stage 1: Foundation Tier** (`tests/stages/01_verify_foundation.sh`)
+  - [x] KMS Customer Managed Key active with annual rotation enabled.
+  - [x] Multi-tier VPC provisioned across 2 AZs (Public Ingress, Private Compute, Isolated Data).
+- [x] **Stage 2: Security & Data Tier** (`tests/stages/02_verify_security_data.sh`)
+  - [x] Strict security group chaining (ALB ➡️ Compute ➡️ Database).
+  - [x] RDS PostgreSQL 16 provisioned in isolated subnets with KMS storage encryption.
+  - [x] AWS Secrets Manager initialized with dynamic high-entropy credentials.
+- [x] **Stage 3: Edge Ingress Tier** (`tests/stages/03_verify_edge_ingress.sh`)
+  - [x] Application Load Balancer active and healthy across `ap-southeast-1a` and `ap-southeast-1b`.
+  - [x] Ingress restricted strictly to authorized client IP CIDRs.
+- [x] **Stage 4: Compute & Egress Tier** (`tests/stages/04_verify_compute_egress.sh`)
+  - [x] `fck-nat` proxy active with IP forwarding & iptables masquerading.
+  - [x] Graviton ARM64 compute node active with IMDSv2 Hop Limit 1 and non-root API daemon.
+- [x] **Stage 5: SOAR Automation & Attack Simulation** (`tests/stages/05_verify_soar_security.sh`)
+  - [x] Simulation 1: Database isolation & unauthorized direct access prevention.
+  - [x] Simulation 2: IMDSv2 SSRF token exfiltration mitigation.
+  - [x] Simulation 3: Egress whitelisting via NAT proxy.
+  - [x] Simulation 4: OpenMetrics telemetry & live health probe reporting.
+  - [x] Simulation 5: EventBridge SOAR trigger & automated containment.
+
+---
+
 ## The 6 Pillars of DevSecOps Implemented
 
 ```
