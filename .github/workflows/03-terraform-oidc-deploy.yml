@@ -12,13 +12,14 @@ on:
           - lab
           - prod
       action:
-        description: "Terraform action to execute"
+        description: "Terraform & Security action to execute"
         required: true
-        default: "plan"
+        default: "apply_and_test"
         type: choice
         options:
+          - apply_and_test
+          - e2e_deploy_test_and_destroy
           - plan
-          - apply
           - destroy
 
 permissions:
@@ -32,6 +33,7 @@ jobs:
     env:
       AWS_REGION: "ap-southeast-1"
       ROLE_TO_ASSUME: "arn:aws:iam::033781183622:role/cloud-devsecops-github-actions-role"
+      ENVIRONMENT: ${{ inputs.environment }}
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
@@ -65,9 +67,15 @@ jobs:
 
       - name: Terraform Apply
         id: apply
-        if: ${{ inputs.action == 'apply' }}
+        if: ${{ inputs.action == 'apply_and_test' || inputs.action == 'e2e_deploy_test_and_destroy' }}
         working-directory: terraform/environments/${{ inputs.environment }}
         run: terraform apply -auto-approve
+
+      - name: Run Live Security Verification & Attack Simulation
+        if: ${{ (inputs.action == 'apply_and_test' || inputs.action == 'e2e_deploy_test_and_destroy') && steps.apply.outcome == 'success' }}
+        run: |
+          echo "Executing automated security test suite..."
+          ./tests/security/simulate_attack.sh
 
       - name: Automated Rollback & Cleanup on Deployment Failure
         if: failure() && steps.apply.outcome == 'failure'
@@ -76,7 +84,16 @@ jobs:
           echo "⚠️ Deployment failed midway! Initiating automated terraform destroy to prevent orphaned cloud resources..."
           terraform destroy -auto-approve
 
-      - name: Terraform Destroy
+      - name: Automated Post-Test Cleanup (E2E Mode)
+        if: ${{ inputs.action == 'e2e_deploy_test_and_destroy' && always() && steps.apply.outcome == 'success' }}
+        working-directory: terraform/environments/${{ inputs.environment }}
+        run: |
+          echo "🧹 E2E Verification complete: cleaning up all AWS resources to reset cost to $0..."
+          terraform destroy -auto-approve
+
+      - name: Manual Terraform Destroy
         if: ${{ inputs.action == 'destroy' }}
         working-directory: terraform/environments/${{ inputs.environment }}
-        run: terraform destroy -auto-approve
+        run: |
+          echo "Executing manual terraform destroy..."
+          terraform destroy -auto-approve
