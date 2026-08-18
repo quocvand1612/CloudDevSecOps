@@ -64,9 +64,17 @@ jobs:
         run: terraform plan -no-color
 
       - name: Terraform Apply
+        id: apply
         if: ${{ inputs.action == 'apply' }}
         working-directory: terraform/environments/${{ inputs.environment }}
         run: terraform apply -auto-approve
+
+      - name: Automated Rollback & Cleanup on Deployment Failure
+        if: failure() && steps.apply.outcome == 'failure'
+        working-directory: terraform/environments/${{ inputs.environment }}
+        run: |
+          echo "⚠️ Deployment failed midway! Initiating automated terraform destroy to prevent orphaned cloud resources..."
+          terraform destroy -auto-approve
 
       - name: Terraform Destroy
         if: ${{ inputs.action == 'destroy' }}

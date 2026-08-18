@@ -24,7 +24,7 @@ variable "vpc_cidr" {
 
 variable "origin_verify_token" {
   type        = string
-  description = "Cryptographic secret token shared between CloudFront and ALB (X-Origin-Verify)"
-  default     = "ZeroTrustOriginVerificationToken2026SecOpsProd"
+  description = "Origin verification token (X-Origin-Verify). If null, dynamically generated with high entropy."
+  default     = null
   sensitive   = true
 }

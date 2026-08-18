@@ -31,8 +31,8 @@ variable "app_port" {
 
 variable "origin_verify_token" {
   type        = string
-  description = "Secret token header validated between CloudFront and ALB (X-Origin-Verify)"
-  default     = "ZeroTrustOriginVerificationToken2026SecOps"
+  description = "Secret token header validated between CloudFront and ALB (X-Origin-Verify). If null, a secure random token is dynamically generated."
+  default     = null
   sensitive   = true
 }
 

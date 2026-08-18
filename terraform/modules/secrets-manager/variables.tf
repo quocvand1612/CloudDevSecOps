@@ -21,13 +21,9 @@ variable "kms_key_arn" {
 
 variable "initial_secret_values" {
   type        = map(string)
-  description = "Initial secret key-value pairs (placeholder/bootstrap)"
-  default = {
-    DATABASE_USER     = "db_admin_sec"
-    DATABASE_PASSWORD = "ChangeMePromptlyViaSecretsManagerRotation123!"
-    JWT_SECRET_KEY    = "DevSecOpsZeroTrustSecretKey2026SignatureValidation"
-    API_KEY           = "devsecops-live-lab-api-key-tokenless"
-  }
+  description = "Optional custom secret key-value pairs (if omitted, high-entropy random secrets are dynamically generated)"
+  default     = {}
+  sensitive   = true
 }
 
 variable "tags" {

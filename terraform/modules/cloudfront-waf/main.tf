@@ -7,6 +7,15 @@ terraform {
   }
 }
 
+resource "random_password" "origin_token" {
+  length  = 48
+  special = false
+}
+
+locals {
+  origin_verify_token = var.origin_verify_token != null ? var.origin_verify_token : random_password.origin_token.result
+}
+
 # ==============================================================================
 # AWS WAFv2 IP Set: Trusted Corporate Network
 # ==============================================================================
@@ -223,7 +232,7 @@ resource "aws_lb_listener_rule" "verify_origin_token" {
   condition {
     http_header {
       http_header_name = "X-Origin-Verify"
-      values           = [var.origin_verify_token]
+      values           = [local.origin_verify_token]
     }
   }
 }
@@ -251,7 +260,7 @@ resource "aws_cloudfront_distribution" "cdn" {
 
     custom_header {
       name  = "X-Origin-Verify"
-      value = var.origin_verify_token
+      value = local.origin_verify_token
     }
   }
 
