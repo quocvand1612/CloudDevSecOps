@@ -1,5 +1,8 @@
 # CloudDevSecOps: Zero-Trust Cloud Security & DevSecOps Platform on AWS
 
+[![Security Lint](https://github.com/quocvand1612/CloudDevSecOps/actions/workflows/01-security-lint.yml/badge.svg)](https://github.com/quocvand1612/CloudDevSecOps/actions/workflows/01-security-lint.yml)
+[![Build Scan Sign](https://github.com/quocvand1612/CloudDevSecOps/actions/workflows/02-build-scan-sign.yml/badge.svg)](https://github.com/quocvand1612/CloudDevSecOps/actions/workflows/02-build-scan-sign.yml)
+[![AWS OIDC Deploy](https://github.com/quocvand1612/CloudDevSecOps/actions/workflows/03-terraform-oidc-deploy.yml/badge.svg)](https://github.com/quocvand1612/CloudDevSecOps/actions/workflows/03-terraform-oidc-deploy.yml)
 [![AWS](https://img.shields.io/badge/AWS-232F3E?style=flat&logo=amazon-aws&logoColor=white)](https://aws.amazon.com/)
 [![Terraform](https://img.shields.io/badge/IaC-Terraform%20%7C%20OpenTofu-7B42BC?style=flat&logo=terraform&logoColor=white)](https://www.terraform.io/)
 [![Kubernetes](https://img.shields.io/badge/K8s-Hardened-326CE5?style=flat&logo=kubernetes&logoColor=white)](https://kubernetes.io/)
