@@ -14,6 +14,14 @@ terraform {
       version = "~> 2.4"
     }
   }
+
+  backend "s3" {
+    bucket         = "cloud-devsecops-tfstate-033781183622-ap-southeast-1"
+    key            = "lab/terraform.tfstate"
+    region         = "ap-southeast-1"
+    dynamodb_table = "cloud-devsecops-tflocks"
+    encrypt        = true
+  }
 }
 
 provider "aws" {
