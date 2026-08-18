@@ -3,8 +3,18 @@ name: "01 - Shift-Left Security & Linting"
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
+      - '**.md'
+      - '.gitignore'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
+      - '**.md'
+      - '.gitignore'
   workflow_dispatch:
 
 permissions:
