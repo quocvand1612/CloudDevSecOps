@@ -12,12 +12,12 @@ on:
           - lab
           - prod
       action:
-        description: "Terraform & Security action to execute"
+        description: "Deployment pipeline execution mode"
         required: true
-        default: "apply_and_test"
+        default: "staged_deploy_and_test"
         type: choice
         options:
-          - apply_and_test
+          - staged_deploy_and_test
           - e2e_deploy_test_and_destroy
           - plan
           - destroy
@@ -26,74 +26,248 @@ permissions:
   id-token: write # Required for requesting AWS STS OIDC token
   contents: read
 
+env:
+  AWS_REGION: "ap-southeast-1"
+  ROLE_TO_ASSUME: "arn:aws:iam::033781183622:role/cloud-devsecops-github-actions-role"
+  ENVIRONMENT: ${{ inputs.environment }}
+
 jobs:
-  terraform-deploy:
-    name: "Terraform Execution (Keyless AWS OIDC)"
+  # ============================================================================
+  # Plan Only Mode
+  # ============================================================================
+  terraform-plan:
+    name: "Terraform Plan"
+    if: ${{ inputs.action == 'plan' }}
     runs-on: ubuntu-latest
-    env:
-      AWS_REGION: "ap-southeast-1"
-      ROLE_TO_ASSUME: "arn:aws:iam::033781183622:role/cloud-devsecops-github-actions-role"
-      ENVIRONMENT: ${{ inputs.environment }}
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials via OIDC (Tokenless)
+      - name: Configure AWS Credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.ROLE_TO_ASSUME }}
-          role-session-name: "GitHubActions-Terraform-Session"
+          role-session-name: "GitHubActions-Plan-Session"
           aws-region: ${{ env.AWS_REGION }}
           audience: sts.amazonaws.com
-
-      - name: Verify AWS Caller Identity
-        run: |
-          echo "Verifying STS Web Identity Federation..."
-          aws sts get-caller-identity
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.8.5"
 
-      - name: Terraform Init
-        working-directory: terraform/environments/${{ inputs.environment }}
-        run: terraform init
-
-      - name: Terraform Plan
-        if: ${{ inputs.action == 'plan' }}
-        working-directory: terraform/environments/${{ inputs.environment }}
-        run: terraform plan -no-color
-
-      - name: Terraform Apply
-        id: apply
-        if: ${{ inputs.action == 'apply_and_test' || inputs.action == 'e2e_deploy_test_and_destroy' }}
-        working-directory: terraform/environments/${{ inputs.environment }}
-        run: terraform apply -auto-approve
-
-      - name: Run Live Security Verification & Attack Simulation
-        if: ${{ (inputs.action == 'apply_and_test' || inputs.action == 'e2e_deploy_test_and_destroy') && steps.apply.outcome == 'success' }}
-        run: |
-          echo "Executing automated security test suite..."
-          ./tests/security/simulate_attack.sh
-
-      - name: Automated Rollback & Cleanup on Deployment Failure
-        if: failure() && steps.apply.outcome == 'failure'
+      - name: Terraform Init & Plan
         working-directory: terraform/environments/${{ inputs.environment }}
         run: |
-          echo "⚠️ Deployment failed midway! Initiating automated terraform destroy to prevent orphaned cloud resources..."
-          terraform destroy -auto-approve
+          terraform init
+          terraform plan -no-color
 
-      - name: Automated Post-Test Cleanup (E2E Mode)
-        if: ${{ inputs.action == 'e2e_deploy_test_and_destroy' && always() && steps.apply.outcome == 'success' }}
+  # ============================================================================
+  # Stage 1: Foundation Tier (KMS CMK + Multi-Tier VPC Hub)
+  # ============================================================================
+  stage-1-foundation:
+    name: "Stage 1: Foundation Tier (KMS & VPC)"
+    if: ${{ inputs.action == 'staged_deploy_and_test' || inputs.action == 'e2e_deploy_test_and_destroy' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+          role-session-name: "GitHubActions-Stage1-Session"
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.8.5"
+
+      - name: Apply Stage 1 Foundation
         working-directory: terraform/environments/${{ inputs.environment }}
         run: |
-          echo "🧹 E2E Verification complete: cleaning up all AWS resources to reset cost to $0..."
-          terraform destroy -auto-approve
+          terraform init
+          terraform apply -target=module.kms -target=module.vpc -auto-approve
 
-      - name: Manual Terraform Destroy
-        if: ${{ inputs.action == 'destroy' }}
+      - name: Stage 1 Gate Test
+        run: ./tests/stages/01_verify_foundation.sh
+
+  # ============================================================================
+  # Stage 2: Security & Data Tier (Security Groups, Secrets Manager, RDS)
+  # ============================================================================
+  stage-2-security-data:
+    name: "Stage 2: Security & Data Tier (RDS & Secrets)"
+    needs: [stage-1-foundation]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+          role-session-name: "GitHubActions-Stage2-Session"
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.8.5"
+
+      - name: Apply Stage 2 Security & Data
         working-directory: terraform/environments/${{ inputs.environment }}
         run: |
-          echo "Executing manual terraform destroy..."
-          terraform destroy -auto-approve
+          terraform init
+          terraform apply -target=module.security_groups -target=module.secrets -target=module.database -auto-approve
+
+      - name: Stage 2 Gate Test
+        run: ./tests/stages/02_verify_security_data.sh
+
+  # ============================================================================
+  # Stage 3: Edge Ingress Tier (Application Load Balancer & WAF)
+  # ============================================================================
+  stage-3-edge-ingress:
+    name: "Stage 3: Edge Ingress Tier (ALB & WAF)"
+    needs: [stage-1-foundation, stage-2-security-data]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+          role-session-name: "GitHubActions-Stage3-Session"
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.8.5"
+
+      - name: Apply Stage 3 Edge Ingress
+        working-directory: terraform/environments/${{ inputs.environment }}
+        run: |
+          terraform init
+          terraform apply -target=module.edge_ingress -auto-approve
+
+      - name: Stage 3 Gate Test
+        run: ./tests/stages/03_verify_edge_ingress.sh
+
+  # ============================================================================
+  # Stage 4: Compute & Egress Tier (fck-nat & Graviton Compute Node)
+  # ============================================================================
+  stage-4-compute-egress:
+    name: "Stage 4: Compute & Egress Tier (NAT & K3s)"
+    needs: [stage-3-edge-ingress]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+          role-session-name: "GitHubActions-Stage4-Session"
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.8.5"
+
+      - name: Apply Stage 4 Compute & Egress
+        working-directory: terraform/environments/${{ inputs.environment }}
+        run: |
+          terraform init
+          terraform apply -target=module.fck_nat -target=module.compute_node -auto-approve
+
+      - name: Stage 4 Gate Test
+        run: ./tests/stages/04_verify_compute_egress.sh
+
+  # ============================================================================
+  # Stage 5: SOAR Automation & Full Live Attack Simulation
+  # ============================================================================
+  stage-5-soar-compliance:
+    name: "Stage 5: SOAR Automation & Threat Simulation"
+    needs: [stage-4-compute-egress]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+          role-session-name: "GitHubActions-Stage5-Session"
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.8.5"
+
+      - name: Apply Stage 5 Full Stack
+        working-directory: terraform/environments/${{ inputs.environment }}
+        run: |
+          terraform init
+          terraform apply -auto-approve
+
+      - name: Stage 5 Gate Test (5/5 Attack Simulation)
+        run: ./tests/stages/05_verify_soar_security.sh
+
+  # ============================================================================
+  # Automated Cleanup on E2E Verification Mode
+  # ============================================================================
+  automated-e2e-teardown:
+    name: "E2E Post-Verification Teardown"
+    if: ${{ inputs.action == 'e2e_deploy_test_and_destroy' && always() }}
+    needs: [stage-5-soar-compliance]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+          role-session-name: "GitHubActions-E2ETeardown-Session"
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      - name: Execute Deep Clean
+        run: ./scripts/deep_clean_lab.sh
+
+  # ============================================================================
+  # Manual Teardown On-Demand
+  # ============================================================================
+  manual-destroy:
+    name: "Manual Infrastructure Teardown"
+    if: ${{ inputs.action == 'destroy' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+          role-session-name: "GitHubActions-Destroy-Session"
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      - name: Execute Deep Clean
+        run: ./scripts/deep_clean_lab.sh
