@@ -240,4 +240,3 @@ CloudDevSecOps/
 
 Maintained by **Quoc Van** ([@quocvand1612](https://github.com/quocvand1612))
 
-<!-- CI Doc Bypass Verified -->
