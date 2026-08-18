@@ -11,7 +11,7 @@ echo "================================================================="
 
 # 1. Verify Security Groups
 echo "Checking Security Groups..."
-for sg_name in "${PROJECT}-${ENV}-compute-sg" "${PROJECT}-${ENV}-alb-sg" "${PROJECT}-${ENV}-db-sg"; do
+for sg_name in "${PROJECT}-${ENV}-compute-sg" "${PROJECT}-${ENV}-alb-sg" "${PROJECT}-${ENV}-database-sg"; do
   SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=$sg_name" --region "$REGION" --query "SecurityGroups[0].GroupId" --output text)
   if [ -z "$SG_ID" ] || [ "$SG_ID" == "None" ]; then
     echo "❌ FAIL: Security Group $sg_name not found!"
