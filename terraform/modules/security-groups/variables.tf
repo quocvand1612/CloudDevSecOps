@@ -23,6 +23,7 @@ variable "allowed_ingress_cidrs" {
   type        = list(string)
   description = "Allowed public CIDR blocks permitted to access the ALB"
   default = [
+    "125.235.173.172/32",
     "103.111.244.0/22",
     "103.111.245.228/32"
   ]
