@@ -78,3 +78,4 @@ trivy-cache/
 sbom/
 coverage/
 junit.xml
+docs/expert_security_assessment_questions.md
