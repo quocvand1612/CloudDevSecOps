@@ -195,7 +195,14 @@ resource "aws_iam_role" "github_actions" {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
           }
           StringLike = {
-            "token.actions.githubusercontent.com:sub" = "repo:quocvand1612/*"
+            "token.actions.githubusercontent.com:sub" = [
+              "repo:quocvand1612*",
+              "repo:quocvand1612/*",
+              "*quocvand1612*CloudDevSecOps*",
+              "*quocvand1612*clouddevsecops*",
+              "*CloudDevSecOps*",
+              "*clouddevsecops*"
+            ]
           }
         }
       }
