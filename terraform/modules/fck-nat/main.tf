@@ -141,16 +141,16 @@ resource "aws_instance" "fck_nat" {
   }
 
   user_data = <<-EOF
-              #!/bin/bash
-              set -e
-              dnf install -y iptables iptables-services
-              echo "net.ipv4.ip_forward=1" >> /etc/sysctl.d/custom-ip-forwarding.conf
-              sysctl -p /etc/sysctl.d/custom-ip-forwarding.conf
-              PRIMARY_IF=$(ip route | grep default | awk '{print $5}')
-              iptables -t nat -A POSTROUTING -o $PRIMARY_IF -j MASQUERADE
-              iptables-save > /etc/sysconfig/iptables
-              systemctl enable iptables
-              EOF
+#!/bin/bash
+set -e
+dnf install -y iptables iptables-services
+echo "net.ipv4.ip_forward=1" >> /etc/sysctl.d/custom-ip-forwarding.conf
+sysctl -p /etc/sysctl.d/custom-ip-forwarding.conf
+PRIMARY_IF=$(ip route | grep default | awk '{print $5}')
+iptables -t nat -A POSTROUTING -o $PRIMARY_IF -j MASQUERADE
+iptables-save > /etc/sysconfig/iptables
+systemctl enable iptables
+EOF
 
   tags = merge(
     var.tags,

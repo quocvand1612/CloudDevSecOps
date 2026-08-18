@@ -117,23 +117,23 @@ resource "aws_instance" "node" {
   }
 
   user_data = <<-EOF
-              #!/bin/bash
-              set -e
-              
-              cat << 'SYSCTL' > /etc/sysctl.d/99-hardened.conf
-              fs.protected_hardlinks = 1
-              fs.protected_symlinks = 1
-              fs.suid_dumpable = 0
-              kernel.randomize_va_space = 2
-              net.ipv4.conf.all.rp_filter = 1
-              net.ipv4.conf.default.rp_filter = 1
-              net.ipv4.conf.all.accept_source_route = 0
-              net.ipv4.conf.default.accept_source_route = 0
-              SYSCTL
-              sysctl -p /etc/sysctl.d/99-hardened.conf
+#!/bin/bash
+set -e
 
-              # Start native high-performance secure-api background service
-              cat << 'PY' > /opt/secure_api.py
+cat << 'SYSCTL' > /etc/sysctl.d/99-hardened.conf
+fs.protected_hardlinks = 1
+fs.protected_symlinks = 1
+fs.suid_dumpable = 0
+kernel.randomize_va_space = 2
+net.ipv4.conf.all.rp_filter = 1
+net.ipv4.conf.default.rp_filter = 1
+net.ipv4.conf.all.accept_source_route = 0
+net.ipv4.conf.default.accept_source_route = 0
+SYSCTL
+sysctl -p /etc/sysctl.d/99-hardened.conf
+
+# Start native high-performance secure-api background service
+cat << 'PY' > /opt/secure_api.py
 import http.server
 import socketserver
 import json
@@ -176,9 +176,9 @@ if __name__ == '__main__':
     server.serve_forever()
 PY
 
-              chmod 644 /opt/secure_api.py
+chmod 644 /opt/secure_api.py
 
-              cat << 'UNIT' > /etc/systemd/system/secure-api.service
+cat << 'UNIT' > /etc/systemd/system/secure-api.service
 [Unit]
 Description=CloudDevSecOps Secure API Microservice
 After=network.target
@@ -195,12 +195,12 @@ Group=nobody
 WantedBy=multi-user.target
 UNIT
 
-              systemctl daemon-reload
-              systemctl enable --now secure-api.service
+systemctl daemon-reload
+systemctl enable --now secure-api.service
 
-              # Install lightweight k3s cluster
-              curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--write-kubeconfig-mode 644 --disable traefik --disable servicelb" sh - || true
-              EOF
+# Install lightweight k3s cluster
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--write-kubeconfig-mode 644 --disable traefik --disable servicelb" sh - || true
+EOF
 
   tags = merge(
     var.tags,
