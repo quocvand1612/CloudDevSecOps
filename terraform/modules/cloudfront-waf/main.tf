@@ -20,6 +20,7 @@ locals {
 # AWS WAFv2 IP Set: Trusted Corporate Network
 # ==============================================================================
 resource "aws_wafv2_ip_set" "trusted_corporate" {
+  count              = var.enable_cloudfront ? 1 : 0
   provider           = aws.us_east_1
   name               = "${var.project_name}-${var.environment}-trusted-corp-ipset"
   description        = "Whitelisted IP ranges for corporate office egress"
@@ -40,6 +41,7 @@ resource "aws_wafv2_ip_set" "trusted_corporate" {
 # AWS WAFv2 WebACL (Global for CloudFront - us-east-1 provider)
 # ==============================================================================
 resource "aws_wafv2_web_acl" "cloudfront" {
+  count       = var.enable_cloudfront ? 1 : 0
   provider    = aws.us_east_1
   name        = "${var.project_name}-${var.environment}-cf-waf"
   description = "AWS WAF protecting CloudFront edge - OWASP Top 10 - Rate Limit - Corp Allow"
@@ -60,7 +62,7 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 
     statement {
       ip_set_reference_statement {
-        arn = aws_wafv2_ip_set.trusted_corporate.arn
+        arn = aws_wafv2_ip_set.trusted_corporate[0].arn
       }
     }
 
@@ -209,18 +211,29 @@ resource "aws_lb_listener" "http" {
   port              = 80
   protocol          = "HTTP"
 
-  default_action {
-    type = "fixed-response"
+  dynamic "default_action" {
+    for_each = var.enable_cloudfront ? [1] : []
+    content {
+      type = "fixed-response"
+      fixed_response {
+        content_type = "text/plain"
+        message_body = "Access Denied: Direct origin access blocked by Zero-Trust policy."
+        status_code  = "403"
+      }
+    }
+  }
 
-    fixed_response {
-      content_type = "text/plain"
-      message_body = "Access Denied: Direct origin access blocked by Zero-Trust policy."
-      status_code  = "403"
+  dynamic "default_action" {
+    for_each = var.enable_cloudfront ? [] : [1]
+    content {
+      type             = "forward"
+      target_group_arn = aws_lb_target_group.app.arn
     }
   }
 }
 
 resource "aws_lb_listener_rule" "verify_origin_token" {
+  count        = var.enable_cloudfront ? 1 : 0
   listener_arn = aws_lb_listener.http.arn
   priority     = 10
 
@@ -241,11 +254,12 @@ resource "aws_lb_listener_rule" "verify_origin_token" {
 # CloudFront Distribution (Edge CDN + Origin Shield + TLS 1.3 Strict)
 # ==============================================================================
 resource "aws_cloudfront_distribution" "cdn" {
+  count           = var.enable_cloudfront ? 1 : 0
   enabled         = true
   is_ipv6_enabled = true
   comment         = "CloudFront CDN for ${var.project_name} ${var.environment}"
   price_class     = "PriceClass_All"
-  web_acl_id      = aws_wafv2_web_acl.cloudfront.arn
+  web_acl_id      = var.enable_cloudfront ? aws_wafv2_web_acl.cloudfront[0].arn : null
 
   origin {
     domain_name = aws_lb.external.dns_name

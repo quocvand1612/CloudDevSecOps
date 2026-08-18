@@ -103,6 +103,7 @@ module "edge_ingress" {
   source                = "../../modules/cloudfront-waf"
   project_name          = var.project_name
   environment           = var.environment
+  enable_cloudfront     = var.enable_cloudfront
   vpc_id                = module.vpc.vpc_id
   public_subnet_ids     = module.vpc.public_subnet_ids
   alb_security_group_id = module.security_groups.alb_security_group_id

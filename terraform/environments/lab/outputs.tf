@@ -1,10 +1,10 @@
 output "cloudfront_url" {
-  description = "Secure Public Entry Point URL via CloudFront CDN"
-  value       = "https://${module.edge_ingress.cloudfront_domain_name}"
+  description = "Public Entry Point URL (CloudFront CDN or Direct Ingress ALB)"
+  value       = module.edge_ingress.cloudfront_domain_name != null ? "https://${module.edge_ingress.cloudfront_domain_name}" : "http://${module.edge_ingress.alb_dns_name}"
 }
 
 output "alb_direct_url_blocked" {
-  description = "Direct ALB URL (Access is blocked with 403 Forbidden by Zero Trust origin policy)"
+  description = "Direct ALB URL (Access is blocked with 403 Forbidden by Zero Trust origin policy when CloudFront is active)"
   value       = "http://${module.edge_ingress.alb_dns_name}"
 }
 

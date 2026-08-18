@@ -34,3 +34,9 @@ variable "use_spot_instance" {
   description = "Use EC2 Spot instances for ~70% cost reduction"
   default     = true
 }
+
+variable "enable_cloudfront" {
+  type        = bool
+  description = "Enable CloudFront CDN distribution and Global WAF (requires verified account in AWS)"
+  default     = false
+}

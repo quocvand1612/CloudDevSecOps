@@ -1,6 +1,6 @@
 output "cloudfront_url" {
-  description = "Production Entry Point URL via CloudFront CDN"
-  value       = "https://${module.edge_ingress.cloudfront_domain_name}"
+  description = "Production Entry Point URL (CloudFront CDN or Direct ALB)"
+  value       = module.edge_ingress.cloudfront_domain_name != null ? "https://${module.edge_ingress.cloudfront_domain_name}" : "http://${module.edge_ingress.alb_dns_name}"
 }
 
 output "eks_cluster_endpoint" {

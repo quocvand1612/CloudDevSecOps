@@ -28,3 +28,9 @@ variable "origin_verify_token" {
   default     = null
   sensitive   = true
 }
+
+variable "enable_cloudfront" {
+  type        = bool
+  description = "Enable CloudFront CDN distribution and Global WAF (requires verified account in AWS)"
+  default     = false
+}

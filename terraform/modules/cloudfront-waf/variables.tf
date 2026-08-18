@@ -8,6 +8,12 @@ variable "environment" {
   description = "Deployment environment"
 }
 
+variable "enable_cloudfront" {
+  type        = bool
+  description = "Enable CloudFront CDN distribution and Global WAF (requires verified account in AWS)"
+  default     = false
+}
+
 variable "vpc_id" {
   type        = string
   description = "VPC ID for ALB target group"

@@ -130,11 +130,16 @@ Configured an automated conditional rollback step in `.github/workflows/03-terra
    - *Issue*: `elasticloadbalancing:DescribeLoadBalancers` returned AccessDenied during ALB management.
    - *Fix*: Added `elasticloadbalancing:*`, `tag:*`, and `application-autoscaling:*` to the bootstrap GitHub Actions IAM policy.
 
-3. **RDS PostgreSQL Engine Version Compatibility**:
-   - *Issue*: Specified minor release `16.3` was unavailable for new database instances in `ap-southeast-1`.
-   - *Fix*: Upgraded target engine version to `16.4`.
+3. **RDS PostgreSQL Engine Version Compatibility in `ap-southeast-1`**:
+   - *Issue*: Older minor versions (`16.3` and `16.4`) have been retired for new instance creation in Singapore (`ap-southeast-1`).
+   - *Fix*: Set engine version to `16.9`, which is active, supported, and free-tier/micro-instance eligible.
 
-4. **Lambda Account Concurrency Safety**:
+4. **CloudFront Account Verification Feature Flag**:
+   - *Issue*: Newly created AWS accounts have CloudFront distributions restricted pending automated account support verification (`AccessDenied: Your account must be verified before you can add new CloudFront resources`).
+   - *Fix*: Implemented `enable_cloudfront` feature toggle (`default = false` in lab), routing ingress directly through ALB + least-privilege security groups when disabled, and activating CloudFront + Global WAF + `X-Origin-Verify` origin shields when enabled.
+
+5. **Lambda Account Concurrency Safety**:
    - *Issue*: `PutFunctionConcurrency` returned `InvalidParameterValueException` on new AWS accounts when reserved execution requested 5 of the 10 available baseline concurrency slots.
    - *Fix*: Removed static concurrency reservation to preserve AWS account unreserved pool stability while enforcing memory caps and KMS encryption.
+
 
