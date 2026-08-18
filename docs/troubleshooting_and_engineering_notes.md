@@ -1,145 +1,123 @@
-# Engineering & Security Troubleshooting Notes
+# Engineering & Troubleshooting Post-Mortem & Changelog
 
-This document provides a comprehensive post-mortem and reference for technical issues encountered, root causes, security implications, and production-grade resolutions implemented during the platform build.
-
----
-
-## 1. AWS IAM OIDC Subject Claim Matching & Anti-Spoofing Protection
-
-### Issue Summary
-Initial pipeline execution for `03 - Keyless AWS Terraform Deployment (OIDC)` failed with:
-```
-Could not assume role with OIDC: Not authorized to perform sts:AssumeRoleWithWebIdentity
-```
-
-### Root Cause Analysis
-1. **GitHub Actions Subject Claim Schema**:
-   GitHub Actions recently enhanced its OpenID Connect (OIDC) JWT claims to include deterministic GitHub Account and Repository numerical IDs in the `sub` claim:
-   ```json
-   {
-     "iss": "https://token.actions.githubusercontent.com",
-     "aud": "sts.amazonaws.com",
-     "sub": "repo:quocvand1612@317749204/CloudDevSecOps@1338120979:ref:refs/heads/main"
-   }
-   ```
-2. **Security Vulnerability of Loose Wildcards**:
-   Attempting to match with loose wildcards like `*CloudDevSecOps*` or `*quocvand1612*CloudDevSecOps*` is a security anti-pattern because any attacker in another GitHub organization could create a repository named `attacker/CloudDevSecOps` or `quocvand1612-fake/CloudDevSecOps` and potentially satisfy a loosely matched sub pattern if not strictly anchored.
-
-### Hardened Production Resolution
-The IAM trust policy in `terraform/bootstrap/main.tf` was strictly anchored to the specific GitHub account username and repository name:
-```hcl
-Condition = {
-  StringEquals = {
-    "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-  }
-  StringLike = {
-    "token.actions.githubusercontent.com:sub" = [
-      "repo:quocvand1612/CloudDevSecOps:*",
-      "repo:quocvand1612@*/CloudDevSecOps@*:*",
-      "repo:quocvand1612@*/CloudDevSecOps:*",
-      "repo:quocvand1612/CloudDevSecOps@*:*"
-    ]
-  }
-}
-```
-**Security Benefit**: Zero possibility of identity spoofing from other GitHub organizations or repositories.
+This document provides a comprehensive, production-grade reference for all technical challenges encountered, root-cause analyses, security implications, diagnostic steps, resolutions, and the corresponding git commits across the platform engineering lifecycle.
 
 ---
 
-## 2. Elimination of Hardcoded Secrets & Dynamic Cryptographic Generation
+## Quick Reference: Issue & Fixing Commit Matrix
 
-### Issue Summary
-`terraform/modules/secrets-manager/variables.tf` and `terraform/modules/cloudfront-waf/variables.tf` previously included default fallback string values for initial credentials and origin verification tokens.
-
-### Security Impact
-Hardcoded credentials committed to source repositories violate:
-- **CIS AWS Foundations Benchmark v3.0** (Control 1.14: Ensure no credentials in code)
-- **OWASP Top 10** (A07:2021 – Identification and Authentication Failures)
-- Automated static analysis gates (Gitleaks, Checkov).
-
-### Hardened Production Resolution
-1. **Dynamic Secrets Generation**:
-   Replaced all hardcoded string defaults with native Terraform `random_password` generation inside the module:
-   ```hcl
-   resource "random_password" "db_password" {
-     length           = 32
-     special          = true
-     override_special = "!#$%&*()-_=+[]{}<>:?"
-   }
-
-   resource "random_password" "jwt_secret" {
-     length  = 64
-     special = false
-   }
-
-   resource "random_password" "api_key" {
-     length  = 32
-     special = false
-   }
-   ```
-2. **Null-Default Interfaces**:
-   All sensitive variables (`origin_verify_token`, `initial_secret_values`) are defaulted to `null` or `{}` with `sensitive = true`, allowing runtime overrides while generating cryptographically high-entropy strings automatically when omitted.
+| # | Issue Summary | Impact Area | Diagnostic Tool | Fixing Commit | Modified Files |
+| :-: | :--- | :--- | :--- | :-: | :--- |
+| **1** | IAM OIDC Subject Claim Anti-Spoofing | IAM / CI/CD Auth | AWS STS OIDC JWT Inspection | `72edc73` | `terraform/bootstrap/main.tf` |
+| **2** | Elimination of Hardcoded Plaintext Secrets | Secrets Management | Checkov / tfsec SAST | `72edc73` | `terraform/modules/secrets-manager/` |
+| **3** | DynamoDB State Lock Contention in CI | Terraform State | AWS DynamoDB Scan | `a55f513` | `.github/workflows/03-terraform-oidc-deploy.yml` |
+| **4** | Spot EC2 Modification (`StopInstances` Error) | EC2 Spot Compute | Terraform Apply Log | `8891d9c` | `terraform/modules/k3s-lab-node/main.tf`, `fck-nat/main.tf` |
+| **5** | AL2023 Minimal AMI Missing `iptables` | NAT & Egress Proxy | AWS SSM Shell / `iptables` | `d8bad18` | `terraform/modules/fck-nat/main.tf` |
+| **6** | Heredoc Indentation `execve()` Format Error | Cloud-Init / User-Data | `/var/log/cloud-init.log` via SSM | `12e68e9` | `terraform/modules/k3s-lab-node/main.tf`, `fck-nat/main.tf` |
+| **7** | Deployment Pipeline Race Conditions | CI/CD Queue | GitHub Actions Run History | `06f6122` | `.github/workflows/03-terraform-oidc-deploy.yml` |
+| **8** | Single Handler for All Microservice Paths | Microservice API | `curl` / ALB Response | `511631a` | `terraform/modules/k3s-lab-node/main.tf` |
+| **9** | Public Perimeter IP Restriction & Whitelisting | Network Edge / WAF | Security Group / `checkip` | `00131b2`, `7b9c559` | `terraform/modules/security-groups/`, `lab/variables.tf` |
+| **10**| Stage Gate Name Filter Alignment | Automated Verification | Stage Gate Bash Scripts | `eb125ce`, `69c2ffb` | `tests/stages/02_*.sh`, `tests/stages/04_*.sh` |
 
 ---
 
-## 3. Automated Rollback & Cleanup on Midway Deployment Failure
+## Detailed Root Cause Analyses & Resolutions
 
-### Issue Summary
-In traditional CI/CD workflows, if `terraform apply` fails halfway (due to cloud API rate limits, transient network partitions, or resource quota exhaustion), partial infrastructure remains active, generating unexpected billing and causing subsequent runs to fail with state lock/resource conflict errors.
-
-### Hardened Production Resolution
-Configured an automated conditional rollback step in `.github/workflows/03-terraform-oidc-deploy.yml`:
-```yaml
-      - name: Terraform Apply
-        id: apply
-        if: ${{ inputs.action == 'apply' }}
-        working-directory: terraform/environments/${{ inputs.environment }}
-        run: terraform apply -auto-approve
-
-      - name: Automated Rollback & Cleanup on Deployment Failure
-        if: failure() && steps.apply.outcome == 'failure'
-        working-directory: terraform/environments/${{ inputs.environment }}
-        run: |
-          echo "⚠️ Deployment failed midway! Initiating automated terraform destroy to prevent orphaned cloud resources..."
-          terraform destroy -auto-approve
-```
-**Operational Benefit**: Ensures zero orphaned cloud resources, zero idle cost leakage, and a clean slate for subsequent pipeline triggers.
+### 1. IAM OIDC Subject Claim Matching & Anti-Spoofing Protection
+- **Commit**: `72edc73`
+- **Symptom**: `sts:AssumeRoleWithWebIdentity` failed with `Not authorized to perform sts:AssumeRoleWithWebIdentity`.
+- **Root Cause**: GitHub Actions token payload contains deterministic repo and org IDs (`repo:quocvand1612@317749204/CloudDevSecOps@1338120979`). Loose wildcards (`*CloudDevSecOps*`) are vulnerable to cross-tenant identity spoofing.
+- **Resolution**: Anchored the IAM trust policy strictly to `repo:quocvand1612/CloudDevSecOps:*` and account-anchored sub claims.
 
 ---
 
-## 4. Go Distroless Microservice Build & Architecture Portability
-
-### Issue Summary
-1. Unused import `"fmt"` in `k8s/apps/secure-api/src/main.go` failed Go strict compilation.
-2. Hardcoded `GOARCH=arm64` prevented seamless native compilation on standard GitHub Actions runners (`linux/amd64`).
-
-### Resolution
-1. Removed unused package dependencies.
-2. Configured Docker Buildx multi-arch dynamic build, allowing the binary to compile natively for the target platform while maintaining a minimalist distroless non-root image (`gcr.io/distroless/static-debian12:nonroot`, UID:GID 65532:65532).
+### 2. Elimination of Hardcoded Secrets & Dynamic Cryptographic Generation
+- **Commit**: `72edc73`
+- **Symptom**: Checkov / tfsec flagged default password strings in `variables.tf`.
+- **Root Cause**: Static fallback strings committed to git violate CIS AWS Benchmark 1.14.
+- **Resolution**: Replaced fallback variables with native Terraform `random_password` resources (32-character high entropy with special character overrides) and marked interfaces `sensitive = true`.
 
 ---
 
-## 5. Live Infrastructure Provisioning & AWS API Edge Cases
+### 3. DynamoDB State Lock Contention in Sequential CI/CD
+- **Commit**: `a55f513` (`fix(ci): add -lock-timeout=60s to all tiered terraform apply jobs`)
+- **Symptom**: Sequential workflow jobs failed with:
+  ```
+  Error: Error acquiring the state lock: ConditionalCheckFailedException
+  Lock Info: ID: aa6728fc-...
+  ```
+- **Root Cause**: When Stage 1 completed and Stage 2 started immediately (~1-2s gap), DynamoDB had a momentary lock release propagation lag.
+- **Resolution**: Added `-lock-timeout=60s` to all `terraform apply` commands in `.github/workflows/03-terraform-oidc-deploy.yml`.
 
-### Findings & Resolutions
-1. **AWS WAFv2 Description Regex Pattern Constraint**:
-   - *Issue*: `CreateWebACL` returned `ValidationException` when description included parentheses `()`.
-   - *Fix*: Formatted description using compliant hyphen delimiters (`AWS WAF protecting CloudFront edge - OWASP Top 10 - Rate Limit - Corp Allow`).
+---
 
-2. **IAM Deployment Permissions for Ingress**:
-   - *Issue*: `elasticloadbalancing:DescribeLoadBalancers` returned AccessDenied during ALB management.
-   - *Fix*: Added `elasticloadbalancing:*`, `tag:*`, and `application-autoscaling:*` to the bootstrap GitHub Actions IAM policy.
+### 4. EC2 Spot Instance Modification (`StopInstances` Not Supported on Spot)
+- **Commit**: `8891d9c` (`fix(ec2): enable user_data_replace_on_change for spot compute and nat instances`)
+- **Symptom**: Terraform failed when updating `user_data` on Spot EC2 instances:
+  ```
+  InvalidParameterCombination: Spot instances cannot be stopped/started
+  ```
+- **Root Cause**: By default, Terraform attempts to stop an instance in-place to modify user_data, which the AWS EC2 Spot API disallows.
+- **Resolution**: Added `user_data_replace_on_change = true` to `aws_instance.node` and `aws_instance.fck_nat` so Terraform terminates and provisions a fresh Spot instance seamlessly.
 
-3. **RDS PostgreSQL Engine Version Compatibility in `ap-southeast-1`**:
-   - *Issue*: Older minor versions (`16.3` and `16.4`) have been retired for new instance creation in Singapore (`ap-southeast-1`).
-   - *Fix*: Set engine version to `16.9`, which is active, supported, and free-tier/micro-instance eligible.
+---
 
-4. **CloudFront Account Verification Feature Flag**:
-   - *Issue*: Newly created AWS accounts have CloudFront distributions restricted pending automated account support verification (`AccessDenied: Your account must be verified before you can add new CloudFront resources`).
-   - *Fix*: Implemented `enable_cloudfront` feature toggle (`default = false` in lab), routing ingress directly through ALB + least-privilege security groups when disabled, and activating CloudFront + Global WAF + `X-Origin-Verify` origin shields when enabled.
+### 5. Amazon Linux 2023 Minimal AMI Missing `iptables` for NAT Routing
+- **Commit**: `d8bad18` (`fix(nat): install iptables-services on fck-nat and ensure secure-api file permissions`)
+- **Symptom**: Private compute nodes in private subnets could not establish outbound connections or register with AWS SSM.
+- **Root Cause**: Amazon Linux 2023 minimal images do not include `iptables` by default. The `fck-nat` user_data script failed silently during `iptables -t nat -A POSTROUTING`.
+- **Resolution**: Added `dnf install -y iptables iptables-services`, enabled IP forwarding in sysctl, saved rules to `/etc/sysconfig/iptables`, and enabled the `iptables` systemd daemon.
 
-5. **Lambda Account Concurrency Safety**:
-   - *Issue*: `PutFunctionConcurrency` returned `InvalidParameterValueException` on new AWS accounts when reserved execution requested 5 of the 10 available baseline concurrency slots.
-   - *Fix*: Removed static concurrency reservation to preserve AWS account unreserved pool stability while enforcing memory caps and KMS encryption.
+---
 
+### 6. Linux Kernel `execve()` Format Error (Errno 8) on Indented Heredocs
+- **Commit**: `12e68e9` (`fix(iac): align user_data to column 0 to prevent execve Errno 8 format error`)
+- **Symptom**: Private compute node booted but `secure-api.service` was missing. `/var/log/cloud-init.log` showed:
+  ```
+  Reason: [Errno 8] Exec format error: b'/var/lib/cloud/instance/scripts/part-001'
+  ```
+- **Root Cause**: In Terraform `<<-EOF`, indentation is stripped relative to the line with least whitespace. When embedded Python code was at column 0, the top line `#!/bin/bash` retained 14 leading spaces. The Linux kernel `execve()` requires magic bytes `0x23 0x21` (`#!`) at byte 0.
+- **Resolution**: Aligned all lines of the `user_data` heredoc strictly to column 0.
 
+---
+
+### 7. Deployment Pipeline Race Conditions & Concurrency
+- **Commit**: `06f6122` (`ci: add concurrency group to prevent overlapping terraform deployments`)
+- **Symptom**: Multiple workflow runs triggered by rapid commits attempted parallel Terraform operations.
+- **Root Cause**: Absence of GitHub Actions concurrency group allowed multiple runners to request OIDC tokens simultaneously.
+- **Resolution**: Configured workflow concurrency group:
+  ```yaml
+  concurrency:
+    group: terraform-deploy-${{ inputs.environment || 'lab' }}
+    cancel-in-progress: false
+  ```
+
+---
+
+### 8. Microservice URL Path Routing & OpenMetrics Telemetry
+- **Commit**: `511631a` (`feat(api): add distinct route handlers for healthz, status, metrics, and threats`)
+- **Symptom**: Requests to `/healthz`, `/api/v1/metrics`, and `/api/v1/status` all returned the generic welcome JSON.
+- **Root Cause**: `SecureHandler.do_GET` lacked path parsing (`urllib.parse.urlparse`).
+- **Resolution**: Implemented dedicated route handlers:
+  - `/` -> System & Architecture Overview JSON
+  - `/healthz` -> Microservice & Database Dependency Health Probe
+  - `/api/v1/status` -> Live Zero-Trust & CIS Security Posture
+  - `/api/v1/metrics` -> Prometheus Text Format (`text/plain; version=0.0.4`)
+  - `/api/v1/threats` -> Threat Intelligence & Incident History
+  - `404 Handler` -> RFC 7807 compliant error payload with route index.
+
+---
+
+### 9. Public Perimeter IP Restriction & Dynamic Whitelisting
+- **Commits**: `00131b2` & `7b9c559`
+- **Symptom**: ALB Security Group had open ingress `0.0.0.0/0`.
+- **Root Cause**: Initial configuration allowed public internet ingress.
+- **Resolution**: Parameterized `allowed_ingress_cidrs` across `security-groups` and `lab` environment. Dynamically added authorized client IP ranges (`125.235.173.172/32`, `103.111.244.0/22`) and deleted `0.0.0.0/0`.
+
+---
+
+### 10. Automated Stage Gate Filter & Name Alignment
+- **Commits**: `eb125ce` & `69c2ffb`
+- **Symptom**: Stage 2 and Stage 4 verification scripts exited with code 1.
+- **Root Cause**: Script AWS CLI filters looked for `cloud-devsecops-lab-db-sg` and `k8s-node`, whereas Terraform named them `cloud-devsecops-lab-database-sg` and `cloud-devsecops-lab-node`.
+- **Resolution**: Synchronized naming variables across all bash verification scripts in `tests/stages/`.
