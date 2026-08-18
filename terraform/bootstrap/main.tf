@@ -246,6 +246,7 @@ resource "aws_iam_policy" "github_actions_policy" {
         Action = [
           "ec2:*",
           "vpc:*",
+          "elasticloadbalancing:*",
           "kms:*",
           "iam:*",
           "eks:*",
@@ -259,7 +260,9 @@ resource "aws_iam_policy" "github_actions_policy" {
           "cloudwatch:*",
           "ssm:*",
           "budgets:*",
-          "sns:*"
+          "sns:*",
+          "tag:*",
+          "application-autoscaling:*"
         ]
         Resource = "*"
       }

@@ -125,17 +125,16 @@ PYTHON
 }
 
 resource "aws_lambda_function" "soar_remediation" {
-  function_name                  = "${var.project_name}-${var.environment}-soar-remediation"
-  description                    = "Automated incident response & pod/instance quarantine"
-  runtime                        = "python3.11"
-  handler                        = "lambda_function.lambda_handler"
-  role                           = aws_iam_role.soar_lambda.arn
-  filename                       = data.archive_file.lambda_zip.output_path
-  source_code_hash               = data.archive_file.lambda_zip.output_base64sha256
-  timeout                        = 30
-  memory_size                    = 128
-  kms_key_arn                    = var.kms_key_arn
-  reserved_concurrent_executions = 5
+  function_name    = "${var.project_name}-${var.environment}-soar-remediation"
+  description      = "Automated incident response & pod/instance quarantine"
+  runtime          = "python3.11"
+  handler          = "lambda_function.lambda_handler"
+  role             = aws_iam_role.soar_lambda.arn
+  filename         = data.archive_file.lambda_zip.output_path
+  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+  timeout          = 30
+  memory_size      = 128
+  kms_key_arn      = var.kms_key_arn
 
   tracing_config {
     mode = "Active"

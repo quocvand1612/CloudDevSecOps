@@ -42,7 +42,7 @@ resource "aws_wafv2_ip_set" "trusted_corporate" {
 resource "aws_wafv2_web_acl" "cloudfront" {
   provider    = aws.us_east_1
   name        = "${var.project_name}-${var.environment}-cf-waf"
-  description = "AWS WAF protecting CloudFront edge (OWASP Top 10 + Rate Limit + Corp Allow)"
+  description = "AWS WAF protecting CloudFront edge - OWASP Top 10 - Rate Limit - Corp Allow"
   scope       = "CLOUDFRONT"
 
   default_action {

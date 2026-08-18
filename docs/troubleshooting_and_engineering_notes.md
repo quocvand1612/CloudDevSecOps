@@ -116,3 +116,25 @@ Configured an automated conditional rollback step in `.github/workflows/03-terra
 ### Resolution
 1. Removed unused package dependencies.
 2. Configured Docker Buildx multi-arch dynamic build, allowing the binary to compile natively for the target platform while maintaining a minimalist distroless non-root image (`gcr.io/distroless/static-debian12:nonroot`, UID:GID 65532:65532).
+
+---
+
+## 5. Live Infrastructure Provisioning & AWS API Edge Cases
+
+### Findings & Resolutions
+1. **AWS WAFv2 Description Regex Pattern Constraint**:
+   - *Issue*: `CreateWebACL` returned `ValidationException` when description included parentheses `()`.
+   - *Fix*: Formatted description using compliant hyphen delimiters (`AWS WAF protecting CloudFront edge - OWASP Top 10 - Rate Limit - Corp Allow`).
+
+2. **IAM Deployment Permissions for Ingress**:
+   - *Issue*: `elasticloadbalancing:DescribeLoadBalancers` returned AccessDenied during ALB management.
+   - *Fix*: Added `elasticloadbalancing:*`, `tag:*`, and `application-autoscaling:*` to the bootstrap GitHub Actions IAM policy.
+
+3. **RDS PostgreSQL Engine Version Compatibility**:
+   - *Issue*: Specified minor release `16.3` was unavailable for new database instances in `ap-southeast-1`.
+   - *Fix*: Upgraded target engine version to `16.4`.
+
+4. **Lambda Account Concurrency Safety**:
+   - *Issue*: `PutFunctionConcurrency` returned `InvalidParameterValueException` on new AWS accounts when reserved execution requested 5 of the 10 available baseline concurrency slots.
+   - *Fix*: Removed static concurrency reservation to preserve AWS account unreserved pool stability while enforcing memory caps and KMS encryption.
+
