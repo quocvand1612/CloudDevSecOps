@@ -88,11 +88,12 @@ module "fck_nat" {
 # Module 4: Least-Privilege Security Groups
 # ==============================================================================
 module "security_groups" {
-  source       = "../../modules/security-groups"
-  project_name = var.project_name
-  environment  = var.environment
-  vpc_id       = module.vpc.vpc_id
-  app_port     = 8080
+  source                = "../../modules/security-groups"
+  project_name          = var.project_name
+  environment           = var.environment
+  vpc_id                = module.vpc.vpc_id
+  app_port              = 8080
+  allowed_ingress_cidrs = var.allowed_ingress_cidrs
 }
 
 # ==============================================================================

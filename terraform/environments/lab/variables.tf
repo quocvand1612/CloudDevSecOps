@@ -40,3 +40,12 @@ variable "enable_cloudfront" {
   description = "Enable CloudFront CDN distribution and Global WAF (requires verified account in AWS)"
   default     = false
 }
+
+variable "allowed_ingress_cidrs" {
+  type        = list(string)
+  description = "Allowed public CIDR blocks permitted to access public endpoints"
+  default = [
+    "103.111.244.0/22",
+    "103.111.245.228/32"
+  ]
+}

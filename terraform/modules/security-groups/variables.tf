@@ -19,6 +19,15 @@ variable "app_port" {
   default     = 8080
 }
 
+variable "allowed_ingress_cidrs" {
+  type        = list(string)
+  description = "Allowed public CIDR blocks permitted to access the ALB"
+  default = [
+    "103.111.244.0/22",
+    "103.111.245.228/32"
+  ]
+}
+
 variable "tags" {
   type        = map(string)
   description = "Additional resource tags"

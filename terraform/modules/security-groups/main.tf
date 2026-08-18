@@ -7,19 +7,19 @@ resource "aws_security_group" "alb" {
   vpc_id      = var.vpc_id
 
   ingress {
-    description = "Allow HTTPS from CloudFront / External clients"
+    description = "Allow HTTPS from trusted client IPs"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.allowed_ingress_cidrs
   }
 
   ingress {
-    description = "Allow HTTP for redirect to HTTPS"
+    description = "Allow HTTP from trusted client IPs"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.allowed_ingress_cidrs
   }
 
   tags = merge(
