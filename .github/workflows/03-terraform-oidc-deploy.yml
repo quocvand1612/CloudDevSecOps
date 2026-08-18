@@ -90,7 +90,7 @@ jobs:
         working-directory: terraform/environments/${{ inputs.environment }}
         run: |
           terraform init
-          terraform apply -target=module.kms -target=module.vpc -auto-approve
+          terraform apply -lock-timeout=60s -target=module.kms -target=module.vpc -auto-approve
 
       - name: Stage 1 Gate Test
         run: ./tests/stages/01_verify_foundation.sh
@@ -123,7 +123,7 @@ jobs:
         working-directory: terraform/environments/${{ inputs.environment }}
         run: |
           terraform init
-          terraform apply -target=module.security_groups -target=module.secrets -target=module.database -auto-approve
+          terraform apply -lock-timeout=60s -target=module.security_groups -target=module.secrets -target=module.database -auto-approve
 
       - name: Stage 2 Gate Test
         run: ./tests/stages/02_verify_security_data.sh
@@ -156,7 +156,7 @@ jobs:
         working-directory: terraform/environments/${{ inputs.environment }}
         run: |
           terraform init
-          terraform apply -target=module.edge_ingress -auto-approve
+          terraform apply -lock-timeout=60s -target=module.edge_ingress -auto-approve
 
       - name: Stage 3 Gate Test
         run: ./tests/stages/03_verify_edge_ingress.sh
@@ -189,7 +189,7 @@ jobs:
         working-directory: terraform/environments/${{ inputs.environment }}
         run: |
           terraform init
-          terraform apply -target=module.fck_nat -target=module.compute_node -auto-approve
+          terraform apply -lock-timeout=60s -target=module.fck_nat -target=module.compute_node -auto-approve
 
       - name: Stage 4 Gate Test
         run: ./tests/stages/04_verify_compute_egress.sh
@@ -222,7 +222,7 @@ jobs:
         working-directory: terraform/environments/${{ inputs.environment }}
         run: |
           terraform init
-          terraform apply -auto-approve
+          terraform apply -lock-timeout=60s -auto-approve
 
       - name: Stage 5 Gate Test (5/5 Attack Simulation)
         run: ./tests/stages/05_verify_soar_security.sh
