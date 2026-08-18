@@ -26,7 +26,7 @@ echo "✓ fck-nat instance ($NAT_ID) verified (Source/Dest check: disabled)."
 
 # 2. Verify Graviton Compute Node (IMDSv2 & Architecture)
 echo "Checking Hardened Graviton Compute Node..."
-NODE_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=${PROJECT}-${ENV}-k3s-node" "Name=instance-state-name,Values=running,pending" --region "$REGION" --query "Reservations[0].Instances[0].InstanceId" --output text)
+NODE_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=${PROJECT}-${ENV}-node,${PROJECT}-${ENV}-k3s-node" "Name=instance-state-name,Values=running,pending" --region "$REGION" --query "Reservations[0].Instances[0].InstanceId" --output text)
 if [ -z "$NODE_ID" ] || [ "$NODE_ID" == "None" ]; then
   echo "❌ FAIL: Compute node instance not found!"
   exit 1

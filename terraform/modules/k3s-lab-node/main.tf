@@ -131,8 +131,7 @@ resource "aws_instance" "node" {
               SYSCTL
               sysctl -p /etc/sysctl.d/99-hardened.conf
 
-              # Install python3 and start native high-performance secure-api background service
-              dnf install -y python3
+              # Start native high-performance secure-api background service
               cat << 'PY' > /opt/secure_api.py
 import http.server
 import socketserver
