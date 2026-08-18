@@ -232,11 +232,11 @@ resource "aws_lb_listener_rule" "verify_origin_token" {
 # CloudFront Distribution (Edge CDN + Origin Shield + TLS 1.3 Strict)
 # ==============================================================================
 resource "aws_cloudfront_distribution" "cdn" {
-  enabled             = true
-  is_ipv6_enabled     = true
-  comment             = "CloudFront CDN for ${var.project_name} ${var.environment}"
-  price_class         = "PriceClass_All"
-  web_acl_id          = aws_wafv2_web_acl.cloudfront.arn
+  enabled         = true
+  is_ipv6_enabled = true
+  comment         = "CloudFront CDN for ${var.project_name} ${var.environment}"
+  price_class     = "PriceClass_All"
+  web_acl_id      = aws_wafv2_web_acl.cloudfront.arn
 
   origin {
     domain_name = aws_lb.external.dns_name

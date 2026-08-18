@@ -5,7 +5,7 @@ WORKDIR /app
 COPY src/main.go .
 
 # Compile static, stripped binary (zero runtime dependencies)
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o secure-api main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o secure-api main.go
 
 # Production Stage: Distroless Static (Non-root UID:GID 65532:65532)
 FROM gcr.io/distroless/static-debian12:nonroot
