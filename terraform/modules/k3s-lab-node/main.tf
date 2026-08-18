@@ -176,6 +176,8 @@ if __name__ == '__main__':
     server.serve_forever()
 PY
 
+              chmod 644 /opt/secure_api.py
+
               cat << 'UNIT' > /etc/systemd/system/secure-api.service
 [Unit]
 Description=CloudDevSecOps Secure API Microservice
