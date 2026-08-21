@@ -12,8 +12,8 @@ variable "environment" {
 
 variable "location" {
   type        = string
-  description = "Azure Region (e.g. southeastasia)"
-  default     = "southeastasia"
+  description = "Azure Region (e.g. eastus)"
+  default     = "eastus"
 }
 
 variable "resource_group_name" {
@@ -40,8 +40,8 @@ variable "subnet_cidr" {
 
 variable "vm_sku" {
   type        = string
-  description = "VM SKU for Spot instances"
-  default     = "Standard_B2s"
+  description = "VM SKU for Ephemeral instances"
+  default     = "Standard_D2als_v7"
 }
 
 variable "disk_size_gb" {

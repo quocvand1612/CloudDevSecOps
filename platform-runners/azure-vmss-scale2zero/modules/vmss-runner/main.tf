@@ -21,7 +21,9 @@ resource "azurerm_subnet" "runner_subnet" {
   resource_group_name  = var.resource_group_name
   virtual_network_name = azurerm_virtual_network.runner_vnet.name
   address_prefixes     = [var.subnet_cidr]
+  depends_on           = [azurerm_virtual_network.runner_vnet]
 }
+
 
 # 2. Network Security Group (Egress Only)
 resource "azurerm_network_security_group" "runner_nsg" {

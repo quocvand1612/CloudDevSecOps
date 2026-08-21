@@ -53,14 +53,13 @@ resource "azurerm_resource_group" "runners_rg" {
 }
 
 # 2. Key Vault for GitHub Runner Token
-resource "random_string" "kv_suffix" {
-  length  = 5
-  special = false
-  upper   = false
+resource "random_id" "kv_suffix" {
+  byte_length = 3
 }
 
 resource "azurerm_key_vault" "runners_kv" {
-  name                       = "kv-${var.environment}-${random_string.kv_suffix.result}"
+  name                       = "kv-${var.environment}-${random_id.kv_suffix.hex}"
+
   location                   = azurerm_resource_group.runners_rg.location
   resource_group_name        = azurerm_resource_group.runners_rg.name
   tenant_id                  = data.azurerm_client_config.current.tenant_id
@@ -128,15 +127,16 @@ resource "azurerm_key_vault_access_policy" "vmss_kv_access" {
   secret_permissions = ["Get"]
 }
 
-# 6. Webhook Scaler Function App
+# 6. Webhook Scaler Function App (Deployed in southeastasia where Y1 consumption quota is active)
 module "webhook_scaler" {
   source              = "./modules/webhook-scaler"
   project_name        = var.project_name
   environment         = var.environment
-  location            = var.location
+  location            = "southeastasia"
   resource_group_name = azurerm_resource_group.runners_rg.name
   subscription_id     = var.subscription_id
   vmss_name           = module.vmss_runner.vmss_name
   webhook_secret      = var.github_webhook_secret
   runner_labels       = "self-hosted,azure-spot"
 }
+

@@ -13,8 +13,9 @@ variable "environment" {
 variable "location" {
   type        = string
   description = "Azure region"
-  default     = "southeastasia"
+  default     = "eastus"
 }
+
 
 variable "resource_group_name" {
   type        = string

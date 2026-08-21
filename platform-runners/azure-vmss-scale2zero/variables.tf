@@ -12,8 +12,8 @@ variable "environment" {
 
 variable "location" {
   type        = string
-  description = "Azure Region (Asia Singapore)"
-  default     = "southeastasia"
+  description = "Azure Region (East US with high capacity)"
+  default     = "eastus"
 }
 
 variable "subscription_id" {
@@ -50,6 +50,6 @@ variable "github_webhook_secret" {
 
 variable "vm_sku" {
   type        = string
-  description = "Azure VM SKU for Spot runners (Standard_B2s)"
-  default     = "Standard_B2s"
+  description = "Azure VM SKU for Ephemeral runners (Standard_D2als_v7 in eastus)"
+  default     = "Standard_D2als_v7"
 }
