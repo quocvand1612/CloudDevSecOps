@@ -66,10 +66,8 @@ resource "azurerm_linux_virtual_machine_scale_set" "runner_vmss" {
     public_key = var.admin_ssh_public_key
   }
 
-  # Spot Configuration
-  priority        = "Spot"
-  eviction_policy = "Deallocate"
-  max_bid_price   = -1 # Pay up to standard price
+  # Standard Priority with Scale-to-Zero (0 idle cost)
+  priority = "Regular"
 
   source_image_reference {
     publisher = "Canonical"

@@ -64,12 +64,14 @@ def github_webhook(req: func.HttpRequest) -> func.HttpResponse:
             # Scale out by 1
             new_capacity = current_capacity + 1
             logging.info(f"Scaling VMSS capacity from {current_capacity} to {new_capacity}")
-            vmss.sku.capacity = new_capacity
-            
-            poller = compute_client.virtual_machine_scale_sets.begin_create_or_update(
+
+            from azure.mgmt.compute.models import VirtualMachineScaleSetUpdate, Sku
+            update_params = VirtualMachineScaleSetUpdate(sku=Sku(capacity=new_capacity))
+
+            compute_client.virtual_machine_scale_sets.begin_update(
                 RESOURCE_GROUP,
                 VMSS_NAME,
-                vmss
+                update_params
             )
             return func.HttpResponse(json.dumps({"message": "Scaling out triggered", "new_capacity": new_capacity}), status_code=200, mimetype="application/json")
 
