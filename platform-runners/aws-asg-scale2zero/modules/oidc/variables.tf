@@ -19,7 +19,7 @@ variable "github_org" {
 variable "create_oidc_provider" {
   type        = bool
   description = "Whether to create the AWS IAM OIDC Provider for GitHub Actions"
-  default     = true
+  default     = false
 }
 
 variable "existing_oidc_provider_arn" {

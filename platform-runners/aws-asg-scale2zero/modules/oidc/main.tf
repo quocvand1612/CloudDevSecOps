@@ -2,12 +2,15 @@
 # AWS IAM OIDC Provider & GitHub Actions Role
 # ==============================================================================
 
-# Data source to fetch GitHub OIDC thumbprint dynamically
+data "aws_caller_identity" "current" {}
+
+# Fetch GitHub OIDC thumbprint dynamically if creating provider
 data "tls_certificate" "github" {
   url = "https://token.actions.githubusercontent.com/.well-known/openid-configuration"
 }
 
-# Check if OIDC provider already exists or create new
+# AWS only allows 1 OIDC Provider per URL per AWS Account.
+# If provider already exists in the account, create_oidc_provider should be false.
 resource "aws_iam_openid_connect_provider" "github" {
   count           = var.create_oidc_provider ? 1 : 0
   url             = "https://token.actions.githubusercontent.com"
@@ -21,7 +24,9 @@ resource "aws_iam_openid_connect_provider" "github" {
 }
 
 locals {
-  oidc_provider_arn = var.create_oidc_provider ? aws_iam_openid_connect_provider.github[0].arn : var.existing_oidc_provider_arn
+  # Deterministic OIDC ARN for GitHub in the current AWS account
+  account_oidc_arn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com"
+  oidc_provider_arn = var.create_oidc_provider ? aws_iam_openid_connect_provider.github[0].arn : (var.existing_oidc_provider_arn != "" ? var.existing_oidc_provider_arn : local.account_oidc_arn)
 }
 
 # Trust policy for GitHub Actions

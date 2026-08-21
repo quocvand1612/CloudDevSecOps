@@ -24,8 +24,8 @@ variable "github_org" {
 
 variable "create_oidc_provider" {
   type        = bool
-  description = "Whether to create IAM OIDC provider or use existing"
-  default     = true
+  description = "Whether to create IAM OIDC provider or use existing in AWS account"
+  default     = false
 }
 
 variable "github_webhook_secret" {
