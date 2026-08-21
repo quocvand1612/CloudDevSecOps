@@ -108,6 +108,7 @@ resource "azurerm_linux_virtual_machine_scale_set" "runner_vmss" {
     key_vault_name      = var.key_vault_name
     secret_name         = var.key_vault_secret_name
     resource_group_name = var.resource_group_name
+    subscription_id     = var.subscription_id
     vmss_name           = "${var.project_name}-${var.environment}-vmss"
   }))
 

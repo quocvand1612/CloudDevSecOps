@@ -67,18 +67,19 @@ resource "azurerm_key_vault" "runners_kv" {
   soft_delete_retention_days = 7
   purge_protection_enabled   = false
 
-  access_policy {
-    tenant_id = data.azurerm_client_config.current.tenant_id
-    object_id = data.azurerm_client_config.current.object_id
-
-    secret_permissions = [
-      "Get", "List", "Set", "Delete", "Purge"
-    ]
-  }
-
   tags = {
     Environment = var.environment
   }
+}
+
+resource "azurerm_key_vault_access_policy" "admin_kv_access" {
+  key_vault_id = azurerm_key_vault.runners_kv.id
+  tenant_id    = data.azurerm_client_config.current.tenant_id
+  object_id    = data.azurerm_client_config.current.object_id
+
+  secret_permissions = [
+    "Get", "List", "Set", "Delete", "Purge"
+  ]
 }
 
 resource "azurerm_key_vault_secret" "runner_token" {
