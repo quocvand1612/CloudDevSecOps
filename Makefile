@@ -1,7 +1,9 @@
 # ==============================================================================
 # CloudDevSecOps - Multi-Cloud Ephemeral Runners & Workload Automation
 # ==============================================================================
-.PHONY: help init lint fmt runner-aws-init runner-aws-plan runner-aws-apply runner-aws-destroy \
+.PHONY: help init lint fmt aws-init aws-plan aws-apply aws-destroy \
+        azure-init azure-plan azure-apply azure-destroy \
+        runner-aws-init runner-aws-plan runner-aws-apply runner-aws-destroy \
         runner-azure-init runner-azure-plan runner-azure-apply runner-azure-destroy \
         workload-plan-lab workload-apply-lab workload-destroy-lab clean
 
@@ -26,6 +28,11 @@ lint: fmt ## Run all local security linters
 # ------------------------------------------------------------------------------
 # Platform Runners: AWS EC2 Auto Scaling Group (Scale-to-Zero Spot)
 # ------------------------------------------------------------------------------
+aws-init: runner-aws-init
+aws-plan: runner-aws-plan
+aws-apply: runner-aws-apply
+aws-destroy: runner-aws-destroy
+
 runner-aws-init: ## Initialize AWS Runner Terraform stack
 	@terraform -chdir=platform-runners/aws-asg-scale2zero init
 
@@ -41,6 +48,11 @@ runner-aws-destroy: ## Destroy AWS Ephemeral Spot Runner Stack
 # ------------------------------------------------------------------------------
 # Platform Runners: Azure VM Scale Sets (Scale-to-Zero Spot in Southeast Asia)
 # ------------------------------------------------------------------------------
+azure-init: runner-azure-init
+azure-plan: runner-azure-plan
+azure-apply: runner-azure-apply
+azure-destroy: runner-azure-destroy
+
 runner-azure-init: ## Initialize Azure Runner Terraform stack
 	@terraform -chdir=platform-runners/azure-vmss-scale2zero init
 
