@@ -1,0 +1,44 @@
+name: "Test Azure Ephemeral Spot Runner (OIDC)"
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "platform-runners/azure-vmss-scale2zero/**"
+
+permissions:
+  id-token: write # Required for requesting GitHub OIDC JWT token
+  contents: read
+
+jobs:
+  validate-azure-runner:
+    name: "Execute on Ephemeral Azure Spot Runner"
+    runs-on: [self-hosted, azure-spot]
+
+    steps:
+      - name: "Checkout Code"
+        uses: actions/checkout@v4
+
+      - name: "Authenticate to Azure via OIDC Workload Identity"
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: "fdf0b2be-d187-4753-92db-b35388d55676"
+          subscription-id: "7d3746c5-7456-498a-b9ea-088c845d696d"
+
+      - name: "Verify Azure Identity via OIDC"
+        run: |
+          echo "=== Azure Account Details ==="
+          az account show
+
+      - name: "Verify Runner System & Docker"
+        run: |
+          echo "=== System Information ==="
+          uname -a
+          hostname
+          uptime
+          echo "=== Docker Daemon Test ==="
+          docker version
+          docker run --rm alpine uname -a

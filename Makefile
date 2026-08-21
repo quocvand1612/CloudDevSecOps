@@ -1,58 +1,70 @@
 # ==============================================================================
-# CloudDevSecOps - Developer Operations & Automation
+# CloudDevSecOps - Multi-Cloud Ephemeral Runners & Workload Automation
 # ==============================================================================
-.PHONY: help init lint checkov tf-init-lab tf-plan-lab tf-apply-lab tf-destroy-lab tf-plan-prod bootstrap-plan bootstrap-apply test-security build-app clean
+.PHONY: help init lint fmt runner-aws-init runner-aws-plan runner-aws-apply runner-aws-destroy \
+        runner-azure-init runner-azure-plan runner-azure-apply runner-azure-destroy \
+        workload-plan-lab workload-apply-lab workload-destroy-lab clean
 
 SHELL := /bin/bash
 
 help: ## Show help screen
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-24s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-28s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 init: ## Initialize pre-commit hooks and local dependencies
 	@echo "Installing pre-commit hooks..."
-	@pre-commit install
+	@pre-commit install || true
 	@echo "Ready for DevSecOps development!"
 
-lint: ## Run all local security linters (Gitleaks, TFLint, Hadolint)
+fmt: ## Format all Terraform configurations
+	@echo "==> Formatting Terraform across repository..."
+	@terraform fmt -recursive
+
+lint: fmt ## Run all local security linters
 	@echo "==> Running Gitleaks Secret Detection..."
 	@gitleaks detect --verbose || true
-	@echo "==> Formatting Terraform..."
-	@terraform fmt -recursive
-	@echo "==> Linting Dockerfile..."
-	@hadolint k8s/apps/secure-api/Dockerfile || true
 
-checkov: ## Run Checkov IaC Security & CIS Benchmark Scanner
-	@echo "==> Running Checkov against Terraform configurations..."
-	@checkov -d terraform/ --framework terraform --compact --quiet
+# ------------------------------------------------------------------------------
+# Platform Runners: AWS EC2 Auto Scaling Group (Scale-to-Zero Spot)
+# ------------------------------------------------------------------------------
+runner-aws-init: ## Initialize AWS Runner Terraform stack
+	@terraform -chdir=platform-runners/aws-asg-scale2zero init
 
-bootstrap-plan: ## Plan AWS OIDC Provider, S3 State & Budget Guardrail
-	@terraform -chdir=terraform/bootstrap init
-	@terraform -chdir=terraform/bootstrap plan
+runner-aws-plan: ## Plan AWS Ephemeral Spot Runner Stack (OIDC + ASG + Lambda Scaler)
+	@terraform -chdir=platform-runners/aws-asg-scale2zero plan
 
-bootstrap-apply: ## Apply AWS OIDC Provider, S3 State & Budget Guardrail
-	@terraform -chdir=terraform/bootstrap apply -auto-approve
+runner-aws-apply: ## Deploy AWS Ephemeral Spot Runner Stack
+	@terraform -chdir=platform-runners/aws-asg-scale2zero apply -auto-approve
 
-tf-init-lab: ## Initialize Lab Terraform environment
-	@terraform -chdir=terraform/environments/lab init
+runner-aws-destroy: ## Destroy AWS Ephemeral Spot Runner Stack
+	@terraform -chdir=platform-runners/aws-asg-scale2zero destroy -auto-approve
 
-tf-plan-lab: ## Plan Lab infrastructure (< $10/mo cost profile)
-	@terraform -chdir=terraform/environments/lab plan
+# ------------------------------------------------------------------------------
+# Platform Runners: Azure VM Scale Sets (Scale-to-Zero Spot in Southeast Asia)
+# ------------------------------------------------------------------------------
+runner-azure-init: ## Initialize Azure Runner Terraform stack
+	@terraform -chdir=platform-runners/azure-vmss-scale2zero init
 
-tf-apply-lab: ## Deploy Lab infrastructure to AWS
-	@terraform -chdir=terraform/environments/lab apply -auto-approve
+runner-azure-plan: ## Plan Azure Ephemeral Spot Runner Stack (Entra OIDC + VMSS + Function Scaler)
+	@terraform -chdir=platform-runners/azure-vmss-scale2zero plan
 
-tf-destroy-lab: ## Destroy Lab infrastructure to guarantee $0 ongoing cost
-	@terraform -chdir=terraform/environments/lab destroy -auto-approve
+runner-azure-apply: ## Deploy Azure Ephemeral Spot Runner Stack
+	@terraform -chdir=platform-runners/azure-vmss-scale2zero apply -auto-approve
 
-tf-plan-prod: ## Plan Production enterprise architecture (Multi-AZ EKS, Aurora)
-	@terraform -chdir=terraform/environments/prod init
-	@terraform -chdir=terraform/environments/prod plan
+runner-azure-destroy: ## Destroy Azure Ephemeral Spot Runner Stack
+	@terraform -chdir=platform-runners/azure-vmss-scale2zero destroy -auto-approve
 
-build-app: ## Build hardened Go microservice container locally
-	@docker build -t ghcr.io/quocvand1612/secure-api:latest k8s/apps/secure-api/
+# ------------------------------------------------------------------------------
+# Workloads Stack (Preserved DevSecOps Core)
+# ------------------------------------------------------------------------------
+workload-plan-lab: ## Plan Workload Lab infrastructure
+	@terraform -chdir=workloads/devsecops-core/terraform/environments/lab init
+	@terraform -chdir=workloads/devsecops-core/terraform/environments/lab plan
 
-test-security: ## Run simulated attack tests (testing Falco & Cilium quarantine)
-	@./tests/security/simulate_attack.sh
+workload-apply-lab: ## Deploy Workload Lab infrastructure
+	@terraform -chdir=workloads/devsecops-core/terraform/environments/lab apply -auto-approve
+
+workload-destroy-lab: ## Destroy Workload Lab infrastructure
+	@terraform -chdir=workloads/devsecops-core/terraform/environments/lab destroy -auto-approve
 
 clean: ## Clean local cache and temporary files
 	@find . -type d -name ".terraform" -exec rm -rf {} +

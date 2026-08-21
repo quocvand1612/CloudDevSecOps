@@ -1,0 +1,44 @@
+name: "Test AWS Ephemeral Spot Runner (OIDC)"
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "platform-runners/aws-asg-scale2zero/**"
+
+permissions:
+  id-token: write # Required for requesting the GitHub OIDC JWT token
+  contents: read
+
+jobs:
+  validate-aws-runner:
+    name: "Execute on Ephemeral AWS Spot Runner"
+    runs-on: [self-hosted, aws-spot]
+
+    steps:
+      - name: "Checkout Code"
+        uses: actions/checkout@v4
+
+      - name: "Authenticate to AWS via OIDC (Keyless)"
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN || 'arn:aws:iam::033781183622:role/devsecops-runners-mgmt-github-actions-role' }}
+          aws-region: ap-southeast-1
+          audience: sts.amazonaws.com
+
+      - name: "Verify AWS Identity via OIDC"
+        run: |
+          echo "=== AWS Caller Identity ==="
+          aws sts get-caller-identity
+
+      - name: "Verify Runner System & Docker"
+        run: |
+          echo "=== System Information ==="
+          uname -a
+          hostname
+          uptime
+          echo "=== Docker Daemon Test ==="
+          docker version
+          docker run --rm alpine uname -a
