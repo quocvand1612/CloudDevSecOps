@@ -16,11 +16,11 @@ terraform {
   }
 
   backend "s3" {
-    bucket         = "cloud-devsecops-tfstate-033781183622-ap-southeast-1"
-    key            = "platform-runners/aws/terraform.tfstate"
-    region         = "ap-southeast-1"
-    dynamodb_table = "cloud-devsecops-tflocks"
-    encrypt        = true
+    bucket       = "cloud-devsecops-tfstate-033781183622-ap-southeast-1"
+    key          = "platform-runners/aws/terraform.tfstate"
+    region       = "ap-southeast-1"
+    use_lockfile = true
+    encrypt      = true
   }
 }
 
