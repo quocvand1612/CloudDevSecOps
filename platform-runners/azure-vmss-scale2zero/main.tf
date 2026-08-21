@@ -113,7 +113,7 @@ module "vmss_runner" {
   subscription_id       = var.subscription_id
   vm_sku                = var.vm_sku
   admin_ssh_public_key  = tls_private_key.ssh.public_key_openssh
-  github_org            = var.github_org
+  github_org            = "${var.github_org}/platform-runners"
   runner_labels         = "self-hosted,azure-spot,linux,x64"
   key_vault_name        = azurerm_key_vault.runners_kv.name
   key_vault_secret_name = azurerm_key_vault_secret.runner_token.name

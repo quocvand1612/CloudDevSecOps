@@ -17,14 +17,25 @@ resource "azuread_service_principal" "github_actions" {
   owners                       = [var.owner_object_id != "" ? var.owner_object_id : data.azuread_client_config.current.object_id]
 }
 
-# 3. Federated Identity Credential (GitHub Actions OIDC)
+locals {
+  federated_subjects = {
+    "runners-main" = "repo:${var.github_org}/platform-runners:ref:refs/heads/main"
+    "runners-pr"   = "repo:${var.github_org}/platform-runners:pull_request"
+    "aws-sec-main" = "repo:${var.github_org}/AWS-DevSecOps:ref:refs/heads/main"
+    "aws-sec-pr"   = "repo:${var.github_org}/AWS-DevSecOps:pull_request"
+    "legacy-main"  = "repo:quocvand1612/CloudDevSecOps:ref:refs/heads/main"
+  }
+}
+
+# 3. Federated Identity Credentials (GitHub Actions OIDC)
 resource "azuread_application_federated_identity_credential" "github_branches" {
+  for_each       = local.federated_subjects
   application_id = azuread_application.github_actions.id
-  display_name   = "github-actions-org-federation"
-  description    = "OIDC trust for GitHub Actions workflows in ${var.github_org}"
+  display_name   = "gh-${each.key}"
+  description    = "OIDC trust for ${each.value}"
   audiences      = ["api://AzureADTokenExchange"]
   issuer         = "https://token.actions.githubusercontent.com"
-  subject        = "repo:${var.github_org}/*"
+  subject        = each.value
 }
 
 # 4. Role Assignment (Contributor / Scope)
