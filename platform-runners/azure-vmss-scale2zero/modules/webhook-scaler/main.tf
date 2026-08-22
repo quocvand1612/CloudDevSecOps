@@ -13,13 +13,20 @@ resource "azurerm_resource_group" "scaler_rg" {
   }
 }
 
+# Provisioning the Function App alone leaves the endpoint without routes.
+data "archive_file" "function_zip" {
+  type        = "zip"
+  source_dir  = "${path.module}/function_app"
+  output_path = "${path.module}/function_app.zip"
+}
+
 # 1. Storage Account for Azure Function App
 resource "random_id" "storage_suffix" {
   byte_length = 4
 }
 
 resource "azurerm_storage_account" "func_storage" {
-  name                     = "scaler${random_id.storage_suffix.hex}sa"
+  name = "scaler${random_id.storage_suffix.hex}sa"
 
   resource_group_name      = azurerm_resource_group.scaler_rg.name
   location                 = azurerm_resource_group.scaler_rg.location
@@ -53,6 +60,7 @@ resource "azurerm_linux_function_app" "scaler" {
   storage_account_name       = azurerm_storage_account.func_storage.name
   storage_account_access_key = azurerm_storage_account.func_storage.primary_access_key
   service_plan_id            = azurerm_service_plan.func_plan.id
+  zip_deploy_file            = data.archive_file.function_zip.output_path
 
   site_config {
     application_stack {
@@ -73,6 +81,7 @@ resource "azurerm_linux_function_app" "scaler" {
     "WEBHOOK_SECRET"                 = var.webhook_secret
     "RUNNER_LABELS"                  = var.runner_labels
     "SCM_DO_BUILD_DURING_DEPLOYMENT" = "true"
+    "SCALER_PACKAGE_HASH"            = data.archive_file.function_zip.output_base64sha256
   }
 
   tags = {

@@ -44,12 +44,22 @@ variable "github_runner_token" {
 variable "github_webhook_secret" {
   type        = string
   description = "GitHub Webhook HMAC SHA256 secret"
-  default     = ""
   sensitive   = true
+
+  validation {
+    condition     = length(var.github_webhook_secret) >= 32
+    error_message = "github_webhook_secret must be at least 32 characters and match the GitHub webhook configuration."
+  }
 }
 
 variable "vm_sku" {
   type        = string
   description = "Azure VM SKU for Ephemeral runners (Standard_D2als_v7 in eastus)"
   default     = "Standard_D2als_v7"
+}
+
+variable "use_golden_image" {
+  type        = bool
+  description = "Use the newest tagged Azure managed image for runner instances"
+  default     = false
 }

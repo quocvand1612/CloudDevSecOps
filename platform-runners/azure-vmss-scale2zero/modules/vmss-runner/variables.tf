@@ -50,6 +50,12 @@ variable "disk_size_gb" {
   default     = 30
 }
 
+variable "use_golden_image" {
+  type        = bool
+  description = "Use the newest tagged Azure managed image instead of the Canonical base image"
+  default     = false
+}
+
 variable "admin_ssh_public_key" {
   type        = string
   description = "SSH public key for admin user"

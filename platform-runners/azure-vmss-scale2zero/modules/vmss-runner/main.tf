@@ -53,6 +53,36 @@ resource "azurerm_subnet_network_security_group_association" "subnet_nsg" {
   network_security_group_id = azurerm_network_security_group.runner_nsg.id
 }
 
+# Packer creates timestamped managed images in this resource group and tags
+# them with a stable Name. Sorting the names selects the newest image without
+# storing a mutable image ID in Terraform variables or configuration.
+data "azurerm_resources" "golden_runner" {
+  count               = var.use_golden_image ? 1 : 0
+  type                = "Microsoft.Compute/images"
+  resource_group_name = var.resource_group_name
+
+  required_tags = {
+    Name = "devsecops-runner-golden-azure"
+  }
+}
+
+locals {
+  golden_image_names = var.use_golden_image ? sort([
+    for image in data.azurerm_resources.golden_runner[0].resources : image.name
+  ]) : []
+  golden_image_name = length(local.golden_image_names) > 0 ? local.golden_image_names[length(local.golden_image_names) - 1] : null
+}
+
+data "azurerm_image" "golden_runner" {
+  count               = local.golden_image_name != null ? 1 : 0
+  name                = local.golden_image_name
+  resource_group_name = var.resource_group_name
+}
+
+locals {
+  golden_image_id = try(data.azurerm_image.golden_runner[0].id, null)
+}
+
 # 3. Linux Virtual Machine Scale Set (Spot, Scale-to-Zero)
 resource "azurerm_linux_virtual_machine_scale_set" "runner_vmss" {
   name                = "${var.project_name}-${var.environment}-vmss"
@@ -71,12 +101,18 @@ resource "azurerm_linux_virtual_machine_scale_set" "runner_vmss" {
   # Standard Priority with Scale-to-Zero (0 idle cost)
   priority = "Regular"
 
-  source_image_reference {
-    publisher = "Canonical"
-    offer     = "0001-com-ubuntu-server-jammy"
-    sku       = "22_04-lts-gen2"
-    version   = "latest"
+  dynamic "source_image_reference" {
+    for_each = local.golden_image_id == null ? [true] : []
+
+    content {
+      publisher = "Canonical"
+      offer     = "0001-com-ubuntu-server-jammy"
+      sku       = "22_04-lts-gen2"
+      version   = "latest"
+    }
   }
+
+  source_image_id = local.golden_image_id
 
   os_disk {
     storage_account_type = "StandardSSD_LRS"
@@ -120,6 +156,11 @@ resource "azurerm_linux_virtual_machine_scale_set" "runner_vmss" {
 
   lifecycle {
     ignore_changes = [instances]
+
+    precondition {
+      condition     = !var.use_golden_image || local.golden_image_id != null
+      error_message = "use_golden_image is enabled, but no tagged devsecops-runner-golden-azure managed image was found in ${var.resource_group_name}."
+    }
   }
 }
 

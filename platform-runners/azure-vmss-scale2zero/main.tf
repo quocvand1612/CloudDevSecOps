@@ -17,6 +17,10 @@ terraform {
       source  = "hashicorp/tls"
       version = "~> 4.0"
     }
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.4"
+    }
   }
 }
 
@@ -58,7 +62,7 @@ resource "random_id" "kv_suffix" {
 }
 
 resource "azurerm_key_vault" "runners_kv" {
-  name                       = "kv-${var.environment}-${random_id.kv_suffix.hex}"
+  name = "kv-${var.environment}-${random_id.kv_suffix.hex}"
 
   location                   = azurerm_resource_group.runners_rg.location
   resource_group_name        = azurerm_resource_group.runners_rg.name
@@ -86,6 +90,14 @@ resource "azurerm_key_vault_secret" "runner_token" {
   name         = "github-runner-token"
   value        = var.github_runner_token != "" ? var.github_runner_token : "placeholder-token"
   key_vault_id = azurerm_key_vault.runners_kv.id
+
+  # The registration token is short-lived (~1hr) and is refreshed out-of-band via
+  # `az keyvault secret set` (see docs/system_prompt_handover.md healthcheck steps).
+  # Ignore drift on `value` so routine `terraform apply` runs for unrelated changes
+  # don't clobber the live token back to the tfvars default/placeholder.
+  lifecycle {
+    ignore_changes = [value]
+  }
 }
 
 # 3. SSH Key for VMSS admin
@@ -117,6 +129,7 @@ module "vmss_runner" {
   runner_labels         = "self-hosted,azure-spot,linux,x64"
   key_vault_name        = azurerm_key_vault.runners_kv.name
   key_vault_secret_name = azurerm_key_vault_secret.runner_token.name
+  use_golden_image      = var.use_golden_image
 }
 
 # Grant VMSS System Identity access to Key Vault
@@ -140,4 +153,3 @@ module "webhook_scaler" {
   webhook_secret      = var.github_webhook_secret
   runner_labels       = "self-hosted,azure-spot"
 }
-
