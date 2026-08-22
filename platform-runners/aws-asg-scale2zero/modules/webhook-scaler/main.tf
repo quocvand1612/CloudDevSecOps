@@ -56,9 +56,36 @@ resource "aws_iam_role_policy" "lambda_scaler_policy" {
           "autoscaling:SetDesiredCapacity"
         ]
         Resource = "*"
+      },
+      {
+        Sid    = "DeduplicateWorkflowJobs"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:PutItem",
+          "dynamodb:DeleteItem"
+        ]
+        Resource = aws_dynamodb_table.webhook_job_dedup.arn
       }
     ]
   })
+}
+
+# GitHub can redeliver workflow_job.queued events. A one-hour TTL makes the
+# scaler idempotent for each job and prevents duplicate idle runners.
+resource "aws_dynamodb_table" "webhook_job_dedup" {
+  name         = "${var.project_name}-${var.environment}-webhook-job-dedup"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "job_id"
+
+  attribute {
+    name = "job_id"
+    type = "S"
+  }
+
+  ttl {
+    attribute_name = "expires_at"
+    enabled        = true
+  }
 }
 
 # Lambda Function
@@ -74,9 +101,10 @@ resource "aws_lambda_function" "scaler" {
 
   environment {
     variables = {
-      ASG_NAME       = var.asg_name
-      WEBHOOK_SECRET = var.webhook_secret
-      RUNNER_LABELS  = var.runner_labels
+      ASG_NAME        = var.asg_name
+      WEBHOOK_SECRET  = var.webhook_secret
+      RUNNER_LABELS   = var.runner_labels
+      JOB_DEDUP_TABLE = aws_dynamodb_table.webhook_job_dedup.name
     }
   }
 
@@ -101,6 +129,13 @@ resource "aws_apigatewayv2_stage" "default" {
   api_id      = aws_apigatewayv2_api.webhook_api.id
   name        = "$default"
   auto_deploy = true
+
+  # Valid workflow_job events are infrequent. Keep a tight limit so malformed
+  # or unauthenticated traffic cannot amplify Lambda/API Gateway spend.
+  default_route_settings {
+    throttling_burst_limit = 10
+    throttling_rate_limit  = 5
+  }
 }
 
 resource "aws_apigatewayv2_integration" "lambda_integration" {

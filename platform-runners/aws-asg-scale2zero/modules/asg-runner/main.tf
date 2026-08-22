@@ -2,7 +2,8 @@
 # AWS EC2 Auto Scaling Group for Scale-to-Zero GitHub Runners
 # ==============================================================================
 
-# Data source for latest Ubuntu 22.04 LTS AMI
+# Data source for latest Ubuntu 22.04 LTS AMI (fallback / base image that the
+# golden image in packer/aws/runner-ami.pkr.hcl is built from)
 data "aws_ami" "ubuntu" {
   most_recent = true
   owners      = ["099720109477"] # Canonical
@@ -16,6 +17,29 @@ data "aws_ami" "ubuntu" {
     name   = "virtualization-type"
     values = ["hvm"]
   }
+}
+
+# Latest self-baked golden image (docker, aws-cli, terraform, tflint, kubectl,
+# helm, trivy, checkov, semgrep, cosign, syft, grype, GH runner pre-extracted).
+# See packer/README.md. Only queried when var.use_golden_image = true.
+data "aws_ami" "golden_runner" {
+  count       = var.use_golden_image ? 1 : 0
+  most_recent = true
+  owners      = ["self"]
+
+  filter {
+    name   = "tag:Name"
+    values = ["devsecops-runner-golden-aws"]
+  }
+
+  filter {
+    name   = "tag:Architecture"
+    values = [var.architecture == "arm64" ? "arm64" : "amd64"]
+  }
+}
+
+locals {
+  runner_ami_id = var.use_golden_image ? data.aws_ami.golden_runner[0].id : data.aws_ami.ubuntu.id
 }
 
 # 1. Security Group: Egress Only (No Ingress Needed for GH Runners)
@@ -100,7 +124,7 @@ resource "aws_iam_instance_profile" "runner_profile" {
 # 3. Launch Template (Spot Instances)
 resource "aws_launch_template" "runner_lt" {
   name_prefix   = "${var.project_name}-${var.environment}-runner-lt-"
-  image_id      = data.aws_ami.ubuntu.id
+  image_id      = local.runner_ami_id
   instance_type = var.instance_type
 
   iam_instance_profile {

@@ -31,8 +31,12 @@ variable "create_oidc_provider" {
 variable "github_webhook_secret" {
   type        = string
   description = "Secret used to sign GitHub webhook payloads"
-  default     = ""
   sensitive   = true
+
+  validation {
+    condition     = length(var.github_webhook_secret) >= 32
+    error_message = "github_webhook_secret must be at least 32 characters and match the GitHub webhook configuration."
+  }
 }
 
 variable "instance_type" {
@@ -45,4 +49,10 @@ variable "max_runners" {
   type        = number
   description = "Max number of parallel runner instances"
   default     = 5
+}
+
+variable "use_golden_image" {
+  type        = bool
+  description = "Use the newest self-baked runner AMI when available"
+  default     = false
 }

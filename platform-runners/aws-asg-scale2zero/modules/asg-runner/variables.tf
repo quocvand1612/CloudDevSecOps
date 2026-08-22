@@ -56,6 +56,12 @@ variable "architecture" {
   default     = "amd64"
 }
 
+variable "use_golden_image" {
+  type        = bool
+  description = "Use a self-baked runner AMI when one is available; false keeps the Canonical Ubuntu fallback."
+  default     = false
+}
+
 variable "disk_size_gb" {
   type        = number
   description = "Root EBS disk size in GB"

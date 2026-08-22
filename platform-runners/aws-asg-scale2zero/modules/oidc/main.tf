@@ -50,7 +50,12 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_org}/*"]
+      # GitHub can emit either the classic "repo:org/repo:..." subject or the
+      # newer immutable-ID form "repo:org@orgId/repo@repoId:...", so match both.
+      values = [
+        "repo:${var.github_org}/*",
+        "repo:${var.github_org}@*/*",
+      ]
     }
   }
 }

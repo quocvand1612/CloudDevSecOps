@@ -79,11 +79,12 @@ module "asg_runner" {
   aws_region        = var.aws_region
   vpc_id            = data.aws_vpc.default.id
   subnet_ids        = data.aws_subnets.default.ids
-  github_org        = var.github_org
+  github_org        = "${var.github_org}/platform-runners"
   token_secret_name = aws_secretsmanager_secret.runner_token.name
   runner_labels     = "self-hosted,aws-spot,linux,x64"
   instance_type     = var.instance_type
   max_runners       = var.max_runners
+  use_golden_image  = var.use_golden_image
 }
 
 # 4. Webhook Scaler (Lambda + API Gateway)
