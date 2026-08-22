@@ -32,10 +32,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Run Gitleaks
-        uses: gitleaks/gitleaks-action@f586c14365d4643c6aa59d472ae6e984bf47bb34 # v2.3.8
+      - name: Install & Run Gitleaks (Secret Detection)
+        run: |
+          GITLEAKS_VERSION="8.18.4"
+          echo "Installing Gitleaks v${GITLEAKS_VERSION}..."
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | sudo tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+          gitleaks detect --source . --verbose --redact
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
   terraform-lint-and-checkov:
     name: "Terraform Lint & Checkov (CIS Benchmark)"
@@ -56,7 +62,7 @@ jobs:
         id: checkov
         uses: bridgecrewio/checkov-action@1246d92f57abae29d5db5f9aeeed2a9813e52d7d # master
         with:
-          directory: terraform/
+          directory: workloads/devsecops-core/terraform/
           framework: terraform
           output_format: cli,sarif
           output_file_path: console,checkov.sarif
@@ -81,5 +87,5 @@ jobs:
       - name: Run Hadolint
         uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4bfde3cf # v3.1.0
         with:
-          dockerfile: k8s/apps/secure-api/Dockerfile
+          dockerfile: workloads/devsecops-core/k8s/apps/secure-api/Dockerfile
           failure-threshold: warning

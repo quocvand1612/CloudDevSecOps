@@ -61,7 +61,7 @@ jobs:
           terraform_version: "1.8.5"
 
       - name: Terraform Init & Plan
-        working-directory: terraform/environments/${{ inputs.environment }}
+        working-directory: workloads/devsecops-core/terraform/environments/${{ inputs.environment }}
         run: |
           terraform init
           terraform plan -no-color
@@ -91,13 +91,13 @@ jobs:
           terraform_version: "1.8.5"
 
       - name: Apply Stage 1 Foundation
-        working-directory: terraform/environments/${{ inputs.environment }}
+        working-directory: workloads/devsecops-core/terraform/environments/${{ inputs.environment }}
         run: |
           terraform init
           terraform apply -lock-timeout=60s -target=module.kms -target=module.vpc -auto-approve
 
       - name: Stage 1 Gate Test
-        run: ./tests/stages/01_verify_foundation.sh
+        run: ./workloads/devsecops-core/tests/stages/01_verify_foundation.sh
 
   # ============================================================================
   # Stage 2: Security & Data Tier (Security Groups, Secrets Manager, RDS)
@@ -124,13 +124,13 @@ jobs:
           terraform_version: "1.8.5"
 
       - name: Apply Stage 2 Security & Data
-        working-directory: terraform/environments/${{ inputs.environment }}
+        working-directory: workloads/devsecops-core/terraform/environments/${{ inputs.environment }}
         run: |
           terraform init
           terraform apply -lock-timeout=60s -target=module.security_groups -target=module.secrets -target=module.database -auto-approve
 
       - name: Stage 2 Gate Test
-        run: ./tests/stages/02_verify_security_data.sh
+        run: ./workloads/devsecops-core/tests/stages/02_verify_security_data.sh
 
   # ============================================================================
   # Stage 3: Edge Ingress Tier (Application Load Balancer & WAF)
@@ -157,13 +157,13 @@ jobs:
           terraform_version: "1.8.5"
 
       - name: Apply Stage 3 Edge Ingress
-        working-directory: terraform/environments/${{ inputs.environment }}
+        working-directory: workloads/devsecops-core/terraform/environments/${{ inputs.environment }}
         run: |
           terraform init
           terraform apply -lock-timeout=60s -target=module.edge_ingress -auto-approve
 
       - name: Stage 3 Gate Test
-        run: ./tests/stages/03_verify_edge_ingress.sh
+        run: ./workloads/devsecops-core/tests/stages/03_verify_edge_ingress.sh
 
   # ============================================================================
   # Stage 4: Compute & Egress Tier (fck-nat & Graviton Compute Node)
@@ -190,13 +190,13 @@ jobs:
           terraform_version: "1.8.5"
 
       - name: Apply Stage 4 Compute & Egress
-        working-directory: terraform/environments/${{ inputs.environment }}
+        working-directory: workloads/devsecops-core/terraform/environments/${{ inputs.environment }}
         run: |
           terraform init
           terraform apply -lock-timeout=60s -target=module.fck_nat -target=module.compute_node -auto-approve
 
       - name: Stage 4 Gate Test
-        run: ./tests/stages/04_verify_compute_egress.sh
+        run: ./workloads/devsecops-core/tests/stages/04_verify_compute_egress.sh
 
   # ============================================================================
   # Stage 5: SOAR Automation & Full Live Attack Simulation
@@ -223,13 +223,13 @@ jobs:
           terraform_version: "1.8.5"
 
       - name: Apply Stage 5 Full Stack
-        working-directory: terraform/environments/${{ inputs.environment }}
+        working-directory: workloads/devsecops-core/terraform/environments/${{ inputs.environment }}
         run: |
           terraform init
           terraform apply -lock-timeout=60s -auto-approve
 
       - name: Stage 5 Gate Test (5/5 Attack Simulation)
-        run: ./tests/stages/05_verify_soar_security.sh
+        run: ./workloads/devsecops-core/tests/stages/05_verify_soar_security.sh
 
   # ============================================================================
   # Automated Cleanup on E2E Verification Mode
@@ -252,7 +252,7 @@ jobs:
           audience: sts.amazonaws.com
 
       - name: Execute Deep Clean
-        run: ./scripts/deep_clean_lab.sh
+        run: ./workloads/devsecops-core/scripts/deep_clean_lab.sh
 
   # ============================================================================
   # Manual Teardown On-Demand
@@ -274,4 +274,4 @@ jobs:
           audience: sts.amazonaws.com
 
       - name: Execute Deep Clean
-        run: ./scripts/deep_clean_lab.sh
+        run: ./workloads/devsecops-core/scripts/deep_clean_lab.sh
