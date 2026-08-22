@@ -50,7 +50,7 @@ All credentials, tokens, and cryptographic keys are managed dynamically via nati
 
 | Secret Name | Purpose | Retrieval Command |
 | :--- | :--- | :--- |
-| `devsecops-runners-mgmt-github-runner-token` | Ephemeral EC2 Runner registration token | `aws secretsmanager get-secret-value --secret-id devsecops-runners-mgmt-github-runner-token --region ap-southeast-1 --query SecretString -o text` |
+| `devsecops-runners-mgmt-runner-token` | Ephemeral EC2 Runner registration token | `aws secretsmanager get-secret-value --secret-id devsecops-runners-mgmt-runner-token --region ap-southeast-1 --query SecretString -o text` |
 
 ---
 
@@ -108,6 +108,6 @@ az keyvault secret set --vault-name "kv-mgmt-0cdrj" --name "github-runner-token"
 echo "[+] Azure Key Vault token updated."
 
 # 3. Update AWS Secrets Manager
-aws secretsmanager put-secret-value --secret-id "devsecops-runners-mgmt-github-runner-token" --secret-string "$NEW_TOKEN" --region ap-southeast-1 --output none
+aws secretsmanager put-secret-value --secret-id "devsecops-runners-mgmt-runner-token" --secret-string "$NEW_TOKEN" --region ap-southeast-1 --output none
 echo "[+] AWS Secrets Manager token updated."
 ```

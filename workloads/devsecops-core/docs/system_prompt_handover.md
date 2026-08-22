@@ -61,7 +61,7 @@ Your mission is to maintain, scale, and secure a multi-tenant, multi-cloud autom
 | :--- | :--- | :--- | :--- |
 | **AWS** | ASG Runner Group | `devsecops-runners-mgmt-asg` | `ap-southeast-1` (Singapore) |
 | **AWS** | Webhook Scaler Lambda | `devsecops-runners-mgmt-webhook-scaler` | `ap-southeast-1` |
-| **AWS** | Secrets Manager | `devsecops-runners-mgmt-github-runner-token` | `ap-southeast-1` |
+| **AWS** | Secrets Manager | `devsecops-runners-mgmt-runner-token` | `ap-southeast-1` |
 | **AWS** | OIDC Role | `devsecops-runners-mgmt-github-oidc-role` | Account `089204859876` |
 | **Azure** | VMSS Runner Group | `devsecops-runners-mgmt-vmss` | `southeastasia` (Singapore) |
 | **Azure** | Function App Scaler | `devsecops-runners-mgmt-scaler-app` | `devsecops-runners-mgmt-rg` |
