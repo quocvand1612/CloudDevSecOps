@@ -3,17 +3,10 @@ import json
 import hmac
 import hashlib
 import logging
+import time
 import urllib.request
 import urllib.error
 import azure.functions as func
-from azure.core.exceptions import ResourceExistsError
-from azure.data.tables import TableServiceClient
-
-try:
-    from azure.identity import DefaultAzureCredential
-    HAS_AZURE_IDENTITY = True
-except ImportError:
-    HAS_AZURE_IDENTITY = False
 
 # GitHub sends HMAC signature header 'X-Hub-Signature-256' for authentication.
 # Anonymous HTTP auth level allows GitHub Webhooks to reach this handler,
@@ -25,7 +18,10 @@ RESOURCE_GROUP = os.environ.get("RESOURCE_GROUP_NAME")
 VMSS_NAME = os.environ.get("VMSS_NAME")
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "")
 RUNNER_LABELS = [l.strip() for l in os.environ.get("RUNNER_LABELS", "self-hosted,azure-spot").split(",") if l.strip()]
-JOB_DEDUP_TABLE = "workflowjobdedup"
+
+# In-memory deduplication cache: {job_id: timestamp}
+_DEDUP_CACHE = {}
+_DEDUP_TTL_SECONDS = 3600
 
 
 def claim_workflow_job(job_id) -> bool:
@@ -33,33 +29,25 @@ def claim_workflow_job(job_id) -> bool:
     if job_id is None:
         return True
 
-    storage_connection = os.environ.get("AzureWebJobsStorage")
-    if not storage_connection:
-        raise RuntimeError("AzureWebJobsStorage is not configured for webhook deduplication")
+    current_time = time.time()
+    # Clean up expired entries
+    expired_keys = [k for k, v in _DEDUP_CACHE.items() if current_time - v > _DEDUP_TTL_SECONDS]
+    for k in expired_keys:
+        _DEDUP_CACHE.pop(k, None)
 
-    table_client = TableServiceClient.from_connection_string(storage_connection).create_table_if_not_exists(JOB_DEDUP_TABLE)
-    try:
-        table_client.create_entity({
-            "PartitionKey": "workflow_job",
-            "RowKey": str(job_id),
-        })
-        return True
-    except ResourceExistsError:
+    job_str = str(job_id)
+    if job_str in _DEDUP_CACHE:
         logging.info("Duplicate queued delivery for workflow job %s; skipping scale-out.", job_id)
         return False
 
+    _DEDUP_CACHE[job_str] = current_time
+    return True
+
 
 def release_workflow_job(job_id) -> None:
-    if job_id is None:
-        return
+    if job_id is not None:
+        _DEDUP_CACHE.pop(str(job_id), None)
 
-    storage_connection = os.environ.get("AzureWebJobsStorage")
-    if storage_connection:
-        try:
-            table_client = TableServiceClient.from_connection_string(storage_connection).get_table_client(JOB_DEDUP_TABLE)
-            table_client.delete_entity("workflow_job", str(job_id))
-        except Exception as e:
-            logging.warning("Failed to release deduplication claim for job %s: %s", job_id, str(e))
 
 def verify_signature(payload_body: bytes, signature_header: str, secret: str) -> bool:
     if not secret or not signature_header:
@@ -69,17 +57,9 @@ def verify_signature(payload_body: bytes, signature_header: str, secret: str) ->
     expected_signature = "sha256=" + hash_object.hexdigest()
     return hmac.compare_digest(expected_signature, signature_header)
 
-def get_azure_management_token() -> str:
-    # 1. Try DefaultAzureCredential if azure-identity is available
-    if HAS_AZURE_IDENTITY:
-        try:
-            credential = DefaultAzureCredential()
-            token_obj = credential.get_token("https://management.azure.com/.default")
-            return token_obj.token
-        except Exception as e:
-            logging.info("DefaultAzureCredential fallback: %s", str(e))
 
-    # 2. App Service / Azure Functions Managed Identity endpoint
+def get_azure_management_token() -> str:
+    # 1. App Service / Azure Functions Managed Identity endpoint
     identity_endpoint = os.environ.get("IDENTITY_ENDPOINT") or os.environ.get("MSI_ENDPOINT")
     identity_header = os.environ.get("IDENTITY_HEADER") or os.environ.get("MSI_SECRET")
 
@@ -90,12 +70,13 @@ def get_azure_management_token() -> str:
             data = json.loads(resp.read().decode("utf-8"))
             return data["access_token"]
 
-    # 3. Azure IMDS endpoint fallback
+    # 2. Azure IMDS endpoint fallback
     imds_url = "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/"
     req = urllib.request.Request(imds_url, headers={"Metadata": "true"})
     with urllib.request.urlopen(req, timeout=10) as resp:
         data = json.loads(resp.read().decode("utf-8"))
         return data["access_token"]
+
 
 def scale_vmss_capacity(subscription_id: str, resource_group: str, vmss_name: str, increment: int = 1) -> int:
     token = get_azure_management_token()
@@ -137,6 +118,7 @@ def scale_vmss_capacity(subscription_id: str, resource_group: str, vmss_name: st
         raise RuntimeError(f"ARM API Error {e.code}: {err_body}")
 
     return new_capacity
+
 
 @app.route(route="webhook", methods=["POST"], auth_level=func.AuthLevel.ANONYMOUS)
 def github_webhook(req: func.HttpRequest) -> func.HttpResponse:

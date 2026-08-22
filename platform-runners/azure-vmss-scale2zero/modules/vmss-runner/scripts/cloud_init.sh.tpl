@@ -131,7 +131,7 @@ else
 fi
 
 if [ "$RUNNER_PREBAKED" = false ]; then
-    ./bin/installdependencies.sh
+    ./bin/installdependencies.sh || true
 fi
 
 # 6. Configure Runner as Ephemeral
