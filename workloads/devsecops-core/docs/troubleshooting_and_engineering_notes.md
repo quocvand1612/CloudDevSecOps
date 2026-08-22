@@ -18,9 +18,11 @@ This document provides a comprehensive, production-grade reference for all techn
 | **8** | Single Handler for All Microservice Paths | Microservice API | `curl` / ALB Response | `511631a` | `terraform/modules/k3s-lab-node/main.tf` |
 | **9** | Public Perimeter IP Restriction & Whitelisting | Network Edge / WAF | Security Group / `checkip` | `00131b2`, `7b9c559` | `terraform/modules/security-groups/`, `lab/variables.tf` |
 | **10**| Stage Gate Name Filter Alignment | Automated Verification | Stage Gate Bash Scripts | `eb125ce`, `69c2ffb` | `tests/stages/02_*.sh`, `tests/stages/04_*.sh` |
-| **17**| Azure Scaler Auth Level & Auto Scale Trigger | Azure VMSS Runner | Azure Functions Log / Webhook | `HEAD` | `modules/webhook-scaler/function_app/` |
-| **18**| AWS Multi-VM Scale-Out via Loose Label Matching | AWS ASG Runner | AWS Lambda CloudWatch Logs | `HEAD` | `modules/webhook-scaler/lambda/scaler.py` |
-| **19**| Gitleaks Action Organization Commercial License Gate | CI/CD Security | GitHub Actions Workflow Logs | `HEAD` | `.github/workflows/01-security-lint.yml` |
+| **17**| Azure Scaler Auth Level, Zero-Dependency Architecture & Triggering | Azure VMSS Runner | Azure Functions / Webhook Log | `deb5280`, `392a673` | `modules/webhook-scaler/function_app/` |
+| **18**| AWS Multi-VM Scale-Out via Loose Label Matching | AWS ASG Runner | AWS Lambda CloudWatch Logs | `70e9ae8` | `modules/webhook-scaler/lambda/scaler.py` |
+| **19**| Gitleaks Action Organization Commercial License Gate | CI/CD Security | GitHub Actions Workflow Logs | `4a9b96a` | `.github/workflows/01-security-lint.yml` |
+| **20**| OCI Lowercase Container Image Reference & Trivy Parsing | CI/CD Registry | Trivy Scanner Logs | `81e3207` | `.github/workflows/02-build-scan-sign.yml` |
+| **21**| Runner Bootstrap Dependency Resilience & Fail-Closed Exit Traps | Ephemeral Runners | Cloud-Init / System Logs | `392a673`, `c804aa3` | `cloud_init.sh.tpl`, `user_data.sh.tpl` |
 
 ---
 
@@ -357,42 +359,138 @@ gh run view RUN_ID --repo QuocVanD-DevSecOpsLab/platform-runners \
 
 ---
 
-### 17. Azure Webhook Authentication (`AuthLevel.ANONYMOUS`) & Scaler Auto-Scale Triggering
+### 17. Azure Webhook Authentication (`AuthLevel.ANONYMOUS`), Zero-Dependency Architecture & Scaler Auto-Scale Triggering
 
-- **Symptom**: Azure VMSS runner never scaled out when GitHub Actions workflows with `runs-on: [self-hosted, azure-spot]` were queued.
-- **Root Cause**: The Azure Function App was configured with `http_auth_level=func.AuthLevel.FUNCTION`. Standard GitHub Webhook configurations send HMAC signatures (`X-Hub-Signature-256`) but do not attach Azure Function Master/Default keys via query strings or headers. The Azure Functions host intercepted incoming webhooks with HTTP 401/404 before the Python handler executed.
-- **Resolution**:
-  1. Configured `@app.route(..., auth_level=func.AuthLevel.ANONYMOUS)` to allow webhook delivery to reach the Python entrypoint.
-  2. Maintained strict cryptographic protection in `verify_signature()` via fail-closed HMAC SHA-256 verification with `WEBHOOK_SECRET`.
-  3. Integrated `DefaultAzureCredential` from `azure-identity` with fallback to `IDENTITY_ENDPOINT` and IMDS for robust ARM management token acquisition.
-  4. Added `teardown_runner` EXIT trap in `cloud_init.sh.tpl` to guarantee VMSS instance deletion on bootstrap failure or completion.
+- **Commits**: `deb5280`, `392a673`
+- **Symptom**:
+  1. Azure VMSS runner never scaled out when GitHub Actions workflows with `runs-on: [self-hosted, azure-spot]` were queued. Webhook deliveries received `HTTP 401/404` at the API Gateway / Function App perimeter.
+  2. Unsigned direct requests or ping events received `404 Not Found` due to Python worker initialization failures.
+- **Root Cause**:
+  1. **HTTP Function Authorization Perimeter Block**: The Function App was configured with `http_auth_level=func.AuthLevel.FUNCTION` (`@app.route(..., auth_level=func.AuthLevel.FUNCTION)`). GitHub Webhooks deliver payloads with standard HMAC SHA-256 headers (`X-Hub-Signature-256`) but cannot dynamically append Azure Function Master/Default keys via query parameters (`?code=...`) or `x-functions-key` headers. The Azure Functions host intercepted incoming webhooks before the Python user code was executed.
+  2. **Python Worker Indexing Crash from OS Binary Architecture Mismatch**: Top-level imports for `azure-data-tables` and `azure-identity` required native C-extensions (such as `_cffi`, `_cryptography`). When deployed from macOS development environments, binary wheels compiled for `darwin_arm64` failed to load in the Linux `x86_64` Python 3.11 Consumption worker runtime (`ModuleNotFoundError` during worker startup). This caused the Functions host to fail worker indexing, resulting in `404 Not Found` for all function routes.
+- **Technical Resolution**:
+  1. **Configured Anonymous Route with Application-Layer Cryptographic HMAC Validation**:
+     Updated the route auth level to `AuthLevel.ANONYMOUS` and enforced strict fail-closed HMAC SHA-256 verification using Python's `hmac.compare_digest()`:
+     ```python
+     @app.route(route="webhook", methods=["POST"], auth_level=func.AuthLevel.ANONYMOUS)
+     def github_webhook(req: func.HttpRequest) -> func.HttpResponse:
+         body_bytes = req.get_body()
+         if len(body_bytes) > 1024 * 1024:
+             return func.HttpResponse(json.dumps({"error": "Payload too large"}), status_code=413)
+         sig_header = req.headers.get("x-hub-signature-256", "")
+         if not verify_signature(body_bytes, sig_header, WEBHOOK_SECRET):
+             return func.HttpResponse(json.dumps({"error": "Unauthorized"}), status_code=401)
+     ```
+  2. **Zero-External-Dependency Runtime Architecture**:
+     Refactored `function_app.py` to rely strictly on the Python 3.11 standard library (`urllib.request`, `hmac`, `hashlib`, `time`, `json`) and built-in `azure.functions` worker APIs. This eliminated all external wheel compilation requirements and cross-platform binary incompatibilities.
+  3. **Sliding-Window In-Memory TTL Deduplication**:
+     Replaced external Table Storage lookups during webhook ingestion with a lightweight, high-performance in-memory cache:
+     ```python
+     _DEDUP_CACHE = {}
+     _DEDUP_TTL_SECONDS = 3600
+
+     def claim_workflow_job(job_id) -> bool:
+         if job_id is None:
+             return True
+         current_time = time.time()
+         expired = [k for k, v in _DEDUP_CACHE.items() if current_time - v > _DEDUP_TTL_SECONDS]
+         for k in expired:
+             _DEDUP_CACHE.pop(k, None)
+         job_str = str(job_id)
+         if job_str in _DEDUP_CACHE:
+             return False
+         _DEDUP_CACHE[job_str] = current_time
+         return True
+     ```
+  4. **Dynamic Management Token Acquisition via Managed Identity**:
+     Acquired ARM tokens via the native App Service identity endpoint (`IDENTITY_ENDPOINT` with `X-IDENTITY-HEADER`) with fallback to IMDS (`169.254.169.254`):
+     ```python
+     def get_azure_management_token() -> str:
+         identity_endpoint = os.environ.get("IDENTITY_ENDPOINT") or os.environ.get("MSI_ENDPOINT")
+         identity_header = os.environ.get("IDENTITY_HEADER") or os.environ.get("MSI_SECRET")
+         if identity_endpoint and identity_header:
+             url = f"{identity_endpoint}?resource=https://management.azure.com/&api-version=2019-08-01"
+             req = urllib.request.Request(url, headers={"X-IDENTITY-HEADER": identity_header})
+             with urllib.request.urlopen(req, timeout=10) as resp:
+                 return json.loads(resp.read().decode("utf-8"))["access_token"]
+     ```
 
 ---
 
 ### 18. Elimination of Multiple VM Scale-Outs on AWS via Strict Runner Label Matching
 
-- **Symptom**: Each workflow execution caused AWS Auto Scaling to launch 2 EC2 Spot runner instances.
-- **Root Cause**: The webhook scaler used loose `any(label in job_labels for label in RUNNER_LABELS)` matching. Because both AWS and Azure workflows requested the common generic label `self-hosted`, the AWS Lambda scaler matched `self-hosted` on non-AWS/Azure jobs (e.g. `[self-hosted, azure-spot]`), treating them as AWS requests and incrementing ASG desired capacity.
-- **Resolution**:
-  1. Replaced `any(...)` with strict subset enforcement:
-     ```python
-     required_labels = set(RUNNER_LABELS)
-     job_labels_set = set(job_labels)
-     if not required_labels.issubset(job_labels_set):
-         return {"statusCode": 200, "body": json.dumps({"message": "Label mismatch"})}
-     ```
-  2. AWS scaler only provisions capacity when both `self-hosted` and `aws-spot` are explicitly required by the workflow job.
-  3. Azure scaler similarly requires `self-hosted` and `azure-spot` to scale the VMSS.
+- **Commit**: `70e9ae8`
+- **Symptom**: Each workflow execution caused AWS Auto Scaling to launch 2 EC2 Spot runner instances, and non-AWS jobs (e.g., Azure runner tests) inadvertently triggered AWS instance launches.
+- **Root Cause**:
+  In `scaler.py`, label matching evaluated `any(label in job_labels for label in RUNNER_LABELS)`. Because both AWS (`[self-hosted, aws-spot]`) and Azure (`[self-hosted, azure-spot]`) workflows requested the common generic label `self-hosted`, the AWS Lambda scaler matched `self-hosted` on non-AWS jobs, treating them as valid AWS runner requests and incrementing the ASG desired capacity.
+- **Technical Resolution**:
+  Replaced loose `any()` evaluation with strict set-theoretic subset enforcement:
+  ```python
+  required_labels = set(RUNNER_LABELS)
+  job_labels_set = set(job_labels)
+  if not required_labels.issubset(job_labels_set):
+      logger.info(f"Job labels {job_labels} do not match required runner labels {RUNNER_LABELS}. Skipping.")
+      return {"statusCode": 200, "body": json.dumps({"message": "Label mismatch"})}
+  ```
+  AWS scaler only scales out when **both** `self-hosted` and `aws-spot` are explicitly present. CloudWatch execution logs confirmed that non-matching events (such as Azure jobs) are filtered and skipped in **7.58ms**, preventing unwanted EC2 provisioning.
 
 ---
 
-### 19. Gitleaks Action Commercial License Gate Resolution & Path Synchronization
+### 19. Gitleaks Action Organization Commercial License Gate Resolution & Path Synchronization
 
-- **Symptom**: Security workflows failed on Gitleaks scanning with organizational license requirements (`GITLEAKS_LICENSE` required for organizations in `gitleaks-action@v2`).
-- **Root Cause**: `gitleaks/gitleaks-action` v2 enforces commercial licensing checks for GitHub organization accounts. Additionally, repository restructuring into `workloads/devsecops-core/` left broken paths for Checkov, Hadolint, and deployment stage gates.
-- **Resolution**:
-  1. Replaced `gitleaks/gitleaks-action` with direct execution of the official open-source Gitleaks standalone binary (`gitleaks detect --source . --verbose --redact`), bypassing the action wrapper license gate while preserving full secret scanning.
-  2. Passed optional `GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}` to maintain compatibility with licensed enterprise secrets.
-  3. Updated Checkov directory to `workloads/devsecops-core/terraform/` and Hadolint target to `workloads/devsecops-core/k8s/apps/secure-api/Dockerfile`.
-  4. Updated deployment pipeline working directories and test stage paths in `03-terraform-oidc-deploy.yml`.
+- **Commit**: `4a9b96a`
+- **Symptom**: Pipeline `01 - Shift-Left Security & Linting` failed with exit code 1 on the Gitleaks scanning step due to a missing commercial organization license (`GITLEAKS_LICENSE`).
+- **Root Cause**:
+  `gitleaks/gitleaks-action@v2` enforces commercial licensing restrictions on GitHub organization accounts. Additionally, repository restructuring into `workloads/devsecops-core/` left broken paths for Checkov, Hadolint, and deployment stage verification scripts.
+- **Technical Resolution**:
+  1. Replaced the action wrapper with direct execution of the official MIT-licensed open-source Gitleaks standalone binary:
+     ```yaml
+     - name: Gitleaks Secret Scanning
+       env:
+         GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+       run: |
+         echo "Installing standalone open-source Gitleaks binary..."
+         GITLEAKS_VERSION="8.24.0"
+         curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar -xz -C /usr/local/bin gitleaks
+         gitleaks detect --source . --verbose --redact
+     ```
+  2. Passed optional `GITLEAKS_LICENSE` to maintain compatibility with licensed enterprise secrets while guaranteeing free, full-fidelity scanning in community and lab scopes (scan completed in 3-6s).
+  3. Synchronized relocated workload paths: Checkov to `workloads/devsecops-core/terraform/`, Hadolint to `workloads/devsecops-core/k8s/apps/secure-api/Dockerfile`, and deployment pipeline stage tests to `workloads/devsecops-core/tests/stages/`.
+
+---
+
+### 20. OCI Lowercase Container Image Reference & Trivy Scanner Parsing
+
+- **Commit**: `81e3207`
+- **Symptom**: Pipeline `02 - Build, Vulnerability Scan & Keyless Cosign Signing` failed during Trivy vulnerability scanning with:
+  ```
+  FATAL image scan error: unable to initialize container image: failed to parse the image name:
+  could not parse reference: ghcr.io/QuocVanD-DevSecOpsLab/secure-api:latest
+  ```
+- **Root Cause**:
+  The Open Container Initiative (OCI) image specification and Docker registry standards strictly require all repository namespace paths in container image references to be lowercase. When `${{ github.repository_owner }}` contained mixed-case letters (`QuocVanD-DevSecOpsLab`), `docker/metadata-action` automatically lowercased tags, but subsequent steps referencing `IMAGE_NAME` passed mixed-case strings, causing Trivy, Syft, and Cosign parsers to reject the image reference.
+- **Technical Resolution**:
+  Introduced an early lowercase normalization step in the workflow and bound environment variables across all container lifecycle actions:
+  ```yaml
+  - name: Set Lowercase Image Reference
+    run: |
+      IMAGE_LOWER=$(echo "${{ env.REGISTRY }}/${{ github.repository_owner }}/secure-api" | tr '[:upper:]' '[:lower:]')
+      echo "IMAGE_REF=${IMAGE_LOWER}:latest" >> $GITHUB_ENV
+      echo "IMAGE_BASE=${IMAGE_LOWER}" >> $GITHUB_ENV
+  ```
+  Updated `aquasecurity/trivy-action`, `syft`, and `cosign` to use `${{ env.IMAGE_REF }}` consistently.
+
+---
+
+### 21. Runner Cloud-Init Bootstrap Dependency Resilience & Fail-Closed Exit Traps
+
+- **Commits**: `392a673`, `c804aa3`
+- **Symptom**:
+  Azure VMSS Spot instances launched from fresh Ubuntu 22.04 LTS images terminated before registering with GitHub; cloud-init logs showed `E: Unable to locate package libssl3t64$`.
+- **Root Cause**:
+  The GitHub Actions runner installer script (`./bin/installdependencies.sh`) in versions 2.322.0+ contains package references intended for Ubuntu 24.04 (`libssl3t64`). On Ubuntu 22.04 LTS (Jammy), `apt-get` returns a non-zero exit code when querying `libssl3t64`. Under `set -euo pipefail`, this non-zero exit code immediately aborted the bootstrap script and triggered the `teardown_runner` EXIT trap, causing the instance to self-terminate before configuring the runner.
+- **Technical Resolution**:
+  1. Updated `installdependencies.sh` invocation to `./bin/installdependencies.sh || true` in both `cloud_init.sh.tpl` and `user_data.sh.tpl`, since all essential runner prerequisites (`libicu`, `libssl`, `curl`, `jq`, `ca-certificates`) are explicitly installed in prior cloud-init steps.
+  2. Retained the `teardown_runner` EXIT trap to ensure that unrecoverable errors or successful job completions safely trigger the ARM instance deletion endpoint (`/providers/Microsoft.Compute/virtualMachineScaleSets/{vmss}/delete`), guaranteeing the scale set returns to zero capacity automatically.
+
 
